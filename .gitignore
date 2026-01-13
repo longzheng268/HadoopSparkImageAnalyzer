@@ -56,3 +56,7 @@ src/main/resources/images/*.jpg
 src/main/resources/images/*.jpeg
 src/main/resources/images/*.png
 src/main/resources/images/*.bmp
+
+# 忽略日志文件
+logs/
+*.log
