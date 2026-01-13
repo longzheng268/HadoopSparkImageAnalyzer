@@ -15,6 +15,12 @@ import java.util.concurrent.*;
  */
 public class MapReduceProcessor {
     
+    // 线程池超时常量
+    private static final int TIMEOUT_HISTOGRAM_SECONDS = 60;
+    private static final int TIMEOUT_SEARCH_SECONDS = 30;
+    private static final int TIMEOUT_LOCAL_FEATURE_SECONDS = 60;
+    private static final int TIMEOUT_TAMPER_SECONDS = 60;
+    
     /**
      * 使用MapReduce模式生成直方图
      * 
@@ -88,7 +94,7 @@ public class MapReduceProcessor {
         
         executor.shutdown();
         try {
-            executor.awaitTermination(60, TimeUnit.SECONDS);
+            executor.awaitTermination(TIMEOUT_HISTOGRAM_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             System.err.println("MapReduce: 等待任务完成超时");
         }
@@ -169,7 +175,7 @@ public class MapReduceProcessor {
         
         executor.shutdown();
         try {
-            executor.awaitTermination(30, TimeUnit.SECONDS);
+            executor.awaitTermination(TIMEOUT_SEARCH_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             System.err.println("MapReduce: 等待任务完成超时");
         }
@@ -177,12 +183,7 @@ public class MapReduceProcessor {
         System.out.println("MapReduce任务完成，处理了 " + results.size() + " 张图像");
         
         // 按相似度降序排序
-        Collections.sort(results, new Comparator<ImageMatcher.MatchResult>() {
-            @Override
-            public int compare(ImageMatcher.MatchResult r1, ImageMatcher.MatchResult r2) {
-                return Double.compare(r2.getSimilarity(), r1.getSimilarity());
-            }
-        });
+        Collections.sort(results, (r1, r2) -> Double.compare(r2.getSimilarity(), r1.getSimilarity()));
         
         // 返回前N个结果
         int resultSize = Math.min(topN, results.size());
@@ -262,7 +263,7 @@ public class MapReduceProcessor {
         
         executor.shutdown();
         try {
-            executor.awaitTermination(60, TimeUnit.SECONDS);
+            executor.awaitTermination(TIMEOUT_LOCAL_FEATURE_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             System.err.println("MapReduce: 等待任务完成超时");
         }
@@ -343,18 +344,13 @@ public class MapReduceProcessor {
         
         executor.shutdown();
         try {
-            executor.awaitTermination(60, TimeUnit.SECONDS);
+            executor.awaitTermination(TIMEOUT_TAMPER_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             System.err.println("MapReduce: 等待任务完成超时");
         }
         
         // 按匹配像素数降序排序
-        Collections.sort(results, new Comparator<TamperDetector.TamperResult>() {
-            @Override
-            public int compare(TamperDetector.TamperResult r1, TamperDetector.TamperResult r2) {
-                return Integer.compare(r2.getMatchingPixels(), r1.getMatchingPixels());
-            }
-        });
+        Collections.sort(results, (r1, r2) -> Integer.compare(r2.getMatchingPixels(), r1.getMatchingPixels()));
         
         System.out.println("MapReduce任务完成");
         return results;
