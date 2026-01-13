@@ -188,7 +188,8 @@ public class TaskLogger {
      * 生成任务ID
      */
     private static String generateTaskId() {
-        return "TASK_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000);
+        // 使用时间戳和计数器确保唯一性
+        return "TASK_" + System.currentTimeMillis() + "_" + Thread.currentThread().getId();
     }
     
     /**

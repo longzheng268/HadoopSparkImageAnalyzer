@@ -13,6 +13,9 @@ import java.util.List;
  */
 public class LocalFeatureMatcher {
     
+    // 像素匹配阈值：灰度差小于此值认为匹配
+    private static final int PIXEL_MATCH_THRESHOLD = 5;
+    
     /**
      * 匹配结果
      */
@@ -167,8 +170,8 @@ public class LocalFeatureMatcher {
                 int diff = Math.abs(featureValue - targetValue);
                 totalDiff += diff;
                 
-                // 如果差异小于5个灰度级，认为匹配
-                if (diff < 5) {
+                // 如果差异小于阈值，认为匹配
+                if (diff < PIXEL_MATCH_THRESHOLD) {
                     matchingPixels++;
                 }
             }

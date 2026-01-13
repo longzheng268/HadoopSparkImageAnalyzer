@@ -15,6 +15,12 @@ import java.util.List;
  */
 public class TamperDetector {
     
+    // 连通域检测阈值：块内差异像素比例超过此值认为是篡改区域
+    private static final double TAMPER_BLOCK_THRESHOLD = 0.3;
+    
+    // 篡改检测的像素块大小
+    private static final int BLOCK_SIZE = 16;
+    
     /**
      * 篡改检测结果
      */
@@ -214,12 +220,11 @@ public class TamperDetector {
         boolean[][] visited = new boolean[height][width];
         
         // 使用网格分割方法识别区域
-        int blockSize = 16; // 16x16 像素块
         
-        for (int by = 0; by < height; by += blockSize) {
-            for (int bx = 0; bx < width; bx += blockSize) {
-                int endX = Math.min(bx + blockSize, width);
-                int endY = Math.min(by + blockSize, height);
+        for (int by = 0; by < height; by += BLOCK_SIZE) {
+            for (int bx = 0; bx < width; bx += BLOCK_SIZE) {
+                int endX = Math.min(bx + BLOCK_SIZE, width);
+                int endY = Math.min(by + BLOCK_SIZE, height);
                 
                 // 统计块内差异像素数
                 int diffCount = 0;
@@ -231,9 +236,9 @@ public class TamperDetector {
                     }
                 }
                 
-                // 如果差异像素超过块的30%，认为是篡改区域
+                // 如果差异像素超过块的指定阈值比例，认为是篡改区域
                 int blockPixels = (endX - bx) * (endY - by);
-                if (diffCount > blockPixels * 0.3) {
+                if (diffCount > blockPixels * TAMPER_BLOCK_THRESHOLD) {
                     regions.add(new TamperedRegion(bx, by, endX - 1, endY - 1, diffCount));
                 }
             }
