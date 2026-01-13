@@ -9,8 +9,10 @@ version = '1.0.0'
 
 // 版本管理
 ext {
-    sparkVersion = '3.3.0'
-    hadoopVersion = '3.3.4'
+    // 使用与环境兼容的版本: Spark 3.1.2, Hadoop 3.2.0
+    sparkVersion = '3.1.2'
+    hadoopVersion = '3.2.0'
+    scala_version = '2.12'
 }
 
 java {
@@ -24,13 +26,17 @@ repositories {
 
 dependencies {
     // Swing GUI框架（Java内置，无需额外依赖）
-    // 如需扩展功能，可启用以下库
-    // implementation 'org.swinglabs:swingx:1.6.1'
-
-    // Hadoop/Spark依赖（示例，需手动启用）
-    // implementation "org.apache.spark:spark-core_2.12:${sparkVersion}"
-    // implementation "org.apache.hadoop:hadoop-client:${hadoopVersion}"
-    // implementation "org.apache.hadoop:hadoop-common:${hadoopVersion}"
+    
+    // Hadoop/Spark依赖 - 已启用分布式计算
+    implementation "org.apache.spark:spark-core_${scala_version}:${sparkVersion}"
+    implementation "org.apache.hadoop:hadoop-client:${hadoopVersion}"
+    implementation "org.apache.hadoop:hadoop-common:${hadoopVersion}"
+    implementation "org.apache.hadoop:hadoop-mapreduce-client-core:${hadoopVersion}"
+    implementation "org.apache.hadoop:hadoop-mapreduce-client-common:${hadoopVersion}"
+    
+    // 日志依赖
+    implementation 'org.slf4j:slf4j-api:1.7.30'
+    implementation 'org.slf4j:slf4j-simple:1.7.30'
 }
 
 application {
