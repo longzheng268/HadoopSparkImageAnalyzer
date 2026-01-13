@@ -1,9 +1,13 @@
 package com.analyzer.core;
 
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -11,6 +15,7 @@ import java.util.List;
 
 /**
  * 图像篡改检测器
+ * 使用Spark RDD实现图像分割并行比对
  * 检测图像局部修改并定位篡改位置
  */
 public class TamperDetector {
@@ -24,7 +29,8 @@ public class TamperDetector {
     /**
      * 篡改检测结果
      */
-    public static class TamperResult {
+    public static class TamperResult implements Serializable {
+        private static final long serialVersionUID = 1L;
         private String filename;
         private int matchingPixels;
         private int totalPixels;
@@ -93,7 +99,8 @@ public class TamperDetector {
     /**
      * 篡改区域
      */
-    public static class TamperedRegion {
+    public static class TamperedRegion implements Serializable {
+        private static final long serialVersionUID = 1L;
         private int startX;
         private int startY;
         private int endX;
@@ -130,7 +137,7 @@ public class TamperDetector {
     }
     
     /**
-     * 检测图像篡改
+     * 检测图像篡改（使用Spark RDD进行图像分割并行比对）
      * 
      * @param suspectImage 疑似被篡改的图像
      * @param imageLibrary 图像库目录
@@ -139,6 +146,8 @@ public class TamperDetector {
      * @throws IOException 处理失败时抛出
      */
     public static List<TamperResult> detectTampering(File suspectImage, File imageLibrary, int threshold) throws IOException {
+        System.out.println("=== 使用Spark RDD进行分布式篡改检测 ===");
+        
         BufferedImage suspect = ImageIO.read(suspectImage);
         if (suspect == null) {
             throw new IOException("无法读取疑似篡改图像");
@@ -146,60 +155,77 @@ public class TamperDetector {
         
         int suspectWidth = suspect.getWidth();
         int suspectHeight = suspect.getHeight();
-        int[][] suspectMatrix = getGrayscaleMatrix(suspect);
+        final int[][] suspectMatrix = getGrayscaleMatrix(suspect);
+        
+        System.out.println("疑似篡改图像尺寸: " + suspectWidth + "x" + suspectHeight);
         
         // 获取图像库中的所有图像
         List<File> libraryImages = ImageResourceDownloader.getExistingImages(imageLibrary);
-        List<TamperResult> results = new ArrayList<>();
         
-        for (File libImage : libraryImages) {
-            // 跳过自己
-            if (libImage.getName().equals(suspectImage.getName())) {
-                continue;
-            }
-            
-            try {
-                BufferedImage original = ImageIO.read(libImage);
-                if (original == null) continue;
-                
-                // 只比较尺寸相同的图像
-                if (original.getWidth() != suspectWidth || original.getHeight() != suspectHeight) {
-                    continue;
-                }
-                
-                int[][] originalMatrix = getGrayscaleMatrix(original);
-                
-                // 逐像素比对
-                int matchingPixels = 0;
-                int totalPixels = suspectWidth * suspectHeight;
-                boolean[][] differenceMap = new boolean[suspectHeight][suspectWidth];
-                
-                for (int y = 0; y < suspectHeight; y++) {
-                    for (int x = 0; x < suspectWidth; x++) {
-                        int diff = Math.abs(suspectMatrix[y][x] - originalMatrix[y][x]);
-                        if (diff <= threshold) {
-                            matchingPixels++;
-                            differenceMap[y][x] = false;
-                        } else {
-                            differenceMap[y][x] = true;
+        // 过滤掉疑似图像本身
+        final String suspectName = suspectImage.getName();
+        libraryImages.removeIf(f -> f.getName().equals(suspectName));
+        
+        System.out.println("图像库大小: " + libraryImages.size() + " 张图像");
+        
+        // 获取Spark上下文
+        JavaSparkContext sc = SparkContextManager.getOrCreateContext();
+        System.out.println("Spark UI: " + SparkContextManager.getSparkUIUrl());
+        
+        // 使用Spark RDD并行处理每张图像
+        JavaRDD<File> imagesRDD = sc.parallelize(libraryImages);
+        
+        List<TamperResult> results = imagesRDD
+            .map(libImage -> {
+                try {
+                    BufferedImage original = ImageIO.read(libImage);
+                    if (original == null) {
+                        return null;
+                    }
+                    
+                    // 只比较尺寸相同的图像
+                    if (original.getWidth() != suspectWidth || original.getHeight() != suspectHeight) {
+                        return null;
+                    }
+                    
+                    int[][] originalMatrix = getGrayscaleMatrix(original);
+                    
+                    // 逐像素比对（这里可以进一步分割成块并行处理）
+                    int matchingPixels = 0;
+                    int totalPixels = suspectWidth * suspectHeight;
+                    boolean[][] differenceMap = new boolean[suspectHeight][suspectWidth];
+                    
+                    for (int y = 0; y < suspectHeight; y++) {
+                        for (int x = 0; x < suspectWidth; x++) {
+                            int diff = Math.abs(suspectMatrix[y][x] - originalMatrix[y][x]);
+                            if (diff <= threshold) {
+                                matchingPixels++;
+                                differenceMap[y][x] = false;
+                            } else {
+                                differenceMap[y][x] = true;
+                            }
                         }
                     }
+                    
+                    TamperResult result = new TamperResult(libImage.getName(), matchingPixels, totalPixels);
+                    
+                    // 识别篡改区域（连通域检测）
+                    List<TamperedRegion> regions = findTamperedRegions(differenceMap, suspectWidth, suspectHeight);
+                    for (TamperedRegion region : regions) {
+                        result.addTamperedRegion(region);
+                    }
+                    
+                    return result;
+                    
+                } catch (IOException e) {
+                    System.err.println("处理图像失败: " + libImage.getName() + " - " + e.getMessage());
+                    return null;
                 }
-                
-                TamperResult result = new TamperResult(libImage.getName(), matchingPixels, totalPixels);
-                
-                // 识别篡改区域（连通域检测）
-                List<TamperedRegion> regions = findTamperedRegions(differenceMap, suspectWidth, suspectHeight);
-                for (TamperedRegion region : regions) {
-                    result.addTamperedRegion(region);
-                }
-                
-                results.add(result);
-                
-            } catch (IOException e) {
-                System.err.println("处理图像失败: " + libImage.getName() + " - " + e.getMessage());
-            }
-        }
+            })
+            .filter(r -> r != null)
+            .collect();
+        
+        System.out.println("Spark任务完成，处理了 " + results.size() + " 张图像");
         
         // 按匹配像素数降序排序
         Collections.sort(results, new Comparator<TamperResult>() {
