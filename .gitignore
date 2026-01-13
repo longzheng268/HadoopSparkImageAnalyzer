@@ -50,3 +50,9 @@ Desktop.ini
 # 忽略大数据依赖下载
 /lib/
 /libs/
+
+# 忽略下载的图像资源
+src/main/resources/images/*.jpg
+src/main/resources/images/*.jpeg
+src/main/resources/images/*.png
+src/main/resources/images/*.bmp

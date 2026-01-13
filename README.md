@@ -25,9 +25,11 @@ HadoopSparkImageAnalyzer/
         ├── java/
         │   └── com/analyzer/
         │       ├── Main.java           # 主程序入口（Swing GUI）
-        │       └── core/               # 核心功能包（预留）
-        │           └── CorePackageInfo.java
-        └── resources/                   # 资源文件目录（预留）
+        │       └── core/               # 核心功能包
+        │           ├── CorePackageInfo.java
+        │           └── ImageResourceDownloader.java  # 图像资源下载器
+        └── resources/                   # 资源文件目录
+            └── images/                  # 样本图像存储目录
 ```
 
 ## 快速开始
@@ -60,6 +62,36 @@ gradlew.bat run
 ```
 
 运行成功后会弹出一个 Swing GUI 窗口，显示项目基本信息。
+
+## 获取样本图像资源
+
+本项目需要图像资源进行分析。我们提供了便捷的图像下载功能：
+
+### 方式一：通过 GUI 下载（推荐）
+
+1. 运行程序后，在主界面点击 **"下载样本图像"** 按钮
+2. 输入需要下载的图像数量（建议：10-50张用于测试）
+3. 程序将自动从 **Lorem Picsum** (picsum.photos) 下载 512×512 灰度图像
+4. 图像保存在 `src/main/resources/images/` 目录下
+
+### 方式二：使用自己的图像
+
+您也可以将自己的图像文件（.jpg, .jpeg, .png, .bmp）直接放入 `src/main/resources/images/` 目录。
+
+### 图像来源说明
+
+- **Lorem Picsum** (https://picsum.photos)：100%可用的免费图像占位服务
+- 提供稳定、高质量的随机图像
+- 支持自定义尺寸和灰度转换
+- 无需API密钥，完全免费使用
+
+### BOSSBase 数据库（可选）
+
+如果您需要专业的隐写分析图像数据集，可以访问：
+- BOSSBase 1.01：包含10,000张512×512灰度图像
+- 下载地址：http://agents.fel.cvut.cz/boss/index.php?mode=VIEW&tmpl=materials
+- 注意：BOSSBase 数据集较大，建议手动下载后放入 `src/main/resources/images/` 目录
+
 
 ### 生成Eclipse项目配置
 
