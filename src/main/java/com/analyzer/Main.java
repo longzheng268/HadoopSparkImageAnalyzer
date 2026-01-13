@@ -155,10 +155,11 @@ public class Main {
         
         // 在后台线程中下载
         final int finalCount = count;
-        new Thread(() -> {
-            try {
+        SwingWorker<List<File>, Void> downloadWorker = new SwingWorker<List<File>, Void>() {
+            @Override
+            protected List<File> doInBackground() throws Exception {
                 File targetDir = new File(IMAGE_RESOURCE_DIR);
-                List<File> downloaded = ImageResourceDownloader.downloadGrayscaleImages(
+                return ImageResourceDownloader.downloadGrayscaleImages(
                     targetDir, 
                     finalCount, 
                     new ImageResourceDownloader.ProgressCallback() {
@@ -179,9 +180,12 @@ public class Main {
                         }
                     }
                 );
-                
-                // 下载完成
-                SwingUtilities.invokeLater(() -> {
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    List<File> downloaded = get();
                     progressDialog.dispose();
                     JOptionPane.showMessageDialog(parentFrame, 
                         String.format("成功下载 %d 张图像！\n保存位置: %s", 
@@ -194,18 +198,18 @@ public class Main {
                     File imageDir = new File(IMAGE_RESOURCE_DIR);
                     List<File> existingImages = ImageResourceDownloader.getExistingImages(imageDir);
                     imageCountLabel.setText("✓ 图像资源：" + existingImages.size() + " 张");
-                });
-                
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> {
+                } catch (Exception ex) {
                     progressDialog.dispose();
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     JOptionPane.showMessageDialog(parentFrame, 
-                        "下载失败: " + ex.getMessage(), 
+                        "下载失败: " + cause.getMessage(), 
                         "错误", 
                         JOptionPane.ERROR_MESSAGE);
-                });
+                }
             }
-        }).start();
+        };
+        
+        downloadWorker.execute();
         
         progressDialog.setVisible(true);
     }

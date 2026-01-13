@@ -60,8 +60,8 @@ public class ImageResourceDownloader {
                     progressCallback.onProgress(i, count, "已下载: " + outputFile.getName());
                 }
                 
-                // 短暂延迟避免API请求过快
-                Thread.sleep(500);
+                // 短暂延迟避免API请求过快（300ms是合理的速率限制）
+                Thread.sleep(300);
                 
             } catch (Exception e) {
                 System.err.println("下载第 " + i + " 张图像失败: " + e.getMessage());
@@ -82,12 +82,10 @@ public class ImageResourceDownloader {
      * @throws IOException 下载失败时抛出
      */
     private static void downloadImage(String imageUrl, File outputFile) throws IOException {
-        HttpURLConnection connection = null;
-        InputStream inputStream = null;
+        URL url = new URL(imageUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         
         try {
-            URL url = new URL(imageUrl);
-            connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(TIMEOUT_MS);
             connection.setReadTimeout(TIMEOUT_MS);
@@ -98,27 +96,18 @@ public class ImageResourceDownloader {
                 throw new IOException("HTTP错误码: " + responseCode);
             }
             
-            inputStream = connection.getInputStream();
-            BufferedImage image = ImageIO.read(inputStream);
-            
-            if (image == null) {
-                throw new IOException("无法解析图像数据");
-            }
-            
-            // 保存图像
-            ImageIO.write(image, "jpg", outputFile);
-            
-        } finally {
-            if (inputStream != null) {
-                try {
-                    inputStream.close();
-                } catch (IOException e) {
-                    // 忽略关闭异常
+            try (InputStream inputStream = connection.getInputStream()) {
+                BufferedImage image = ImageIO.read(inputStream);
+                
+                if (image == null) {
+                    throw new IOException("无法解析图像数据");
                 }
+                
+                // 保存图像
+                ImageIO.write(image, "jpg", outputFile);
             }
-            if (connection != null) {
-                connection.disconnect();
-            }
+        } finally {
+            connection.disconnect();
         }
     }
     
