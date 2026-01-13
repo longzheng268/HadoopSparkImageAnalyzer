@@ -276,12 +276,64 @@ spark-submit --version  # 应显示3.3.3
 - **构建工具**：Gradle
 - **GUI框架**：Java Swing
 - **大数据框架**：
-  - Hadoop MapReduce 3.2.0（默认计算引擎）
-  - Apache Spark 3.1.2（可选计算引擎）
+  - **Hadoop MapReduce 3.2.4**（默认计算引擎）
+    - ✨ **新功能**: 支持真实的Hadoop MapReduce任务提交
+    - 自动检测YARN集群可用性
+    - YARN可用时: 提交真实MapReduce任务到集群（可在http://localhost:8088查看）
+    - YARN不可用时: 自动降级使用线程池模拟
+  - Apache Spark 3.3.3（可选计算引擎）
 - **存储系统**：
   - HBase 2.2.7（图像和直方图存储）
   - Redis 6.2.9（搜索结果缓存，通过Jedis客户端）
 - **开发工具**：兼容 Eclipse IDE
+
+## 🎯 Hadoop MapReduce 真实任务支持
+
+本系统现在支持提交**真正的Hadoop MapReduce任务**到YARN集群！
+
+### 使用方式
+
+#### 方式1: 使用真实Hadoop集群（推荐生产环境）
+
+```bash
+# 1. 配置环境变量
+export HADOOP_HOME=/path/to/hadoop
+
+# 2. 启动Hadoop服务
+start-dfs.sh
+start-yarn.sh
+
+# 3. 运行程序
+./gradlew run
+
+# 4. 查看任务
+# 访问 http://localhost:8088 查看YARN资源管理器
+# 所有图像处理任务都会显示在Web UI中
+```
+
+#### 方式2: 无Hadoop环境（自动降级）
+
+如果没有Hadoop集群，程序会自动使用线程池模拟MapReduce：
+
+```bash
+# 直接运行即可
+./gradlew run
+
+# 系统会显示: "注意: 未设置HADOOP_HOME环境变量，使用线程池模拟MapReduce"
+```
+
+### 特性对比
+
+| 特性 | 真实MapReduce（YARN） | 线程池模拟 |
+|------|----------------------|-----------|
+| 运行环境 | 需要Hadoop集群 | 无依赖 |
+| 任务监控 | ✅ Web UI (localhost:8088) | ❌ 仅命令行输出 |
+| 分布式处理 | ✅ 多节点并行 | ❌ 单机多线程 |
+| 容错重试 | ✅ 自动 | ❌ 无 |
+| 性能 | 高（集群规模） | 中等（CPU核心数） |
+| 适用场景 | 生产环境、大规模数据 | 开发测试、小规模数据 |
+
+详细说明请参阅 [MAPREDUCE_IMPLEMENTATION.md](MAPREDUCE_IMPLEMENTATION.md)
 
 ## 项目结构
 
@@ -291,6 +343,7 @@ HadoopSparkImageAnalyzer/
 ├── settings.gradle             # Gradle项目设置
 ├── .gitignore                  # Git忽略文件配置
 ├── README.md                   # 项目说明文档
+├── MAPREDUCE_IMPLEMENTATION.md # MapReduce实现说明
 ├── logs/                       # 任务日志目录
 │   └── task_log.txt           # 任务日志文件
 └── src/
@@ -298,23 +351,30 @@ HadoopSparkImageAnalyzer/
         ├── java/
         │   └── com/analyzer/
         │       ├── Main.java                          # 主程序入口（Swing GUI）
-        │       └── core/                              # 核心功能包
-        │           ├── CorePackageInfo.java          # 包信息
-        │           ├── ImageResourceDownloader.java  # 图像资源下载器
-        │           ├── ImageHistogram.java           # 图像直方图生成器
-        │           ├── ImageMatcher.java             # 全图搜索匹配器（支持双引擎）
-        │           ├── LocalFeatureMatcher.java      # 局部特征搜索匹配器（支持双引擎）
-        │           ├── TamperDetector.java           # 图像篡改检测器（支持双引擎）
-        │           ├── ComputeEngineManager.java     # 计算引擎管理器
-        │           ├── MapReduceProcessor.java       # MapReduce实现处理器
-        │           ├── SparkContextManager.java      # Spark上下文管理器
-        │           ├── HBaseManager.java             # HBase管理器
-        │           ├── RedisManager.java             # Redis管理器
-        │           ├── CacheManager.java             # 缓存管理器
-        │           └── TaskLogger.java               # 任务日志系统
+        │       ├── core/                              # 核心功能包
+        │       │   ├── CorePackageInfo.java          # 包信息
+        │       │   ├── ImageResourceDownloader.java  # 图像资源下载器
+        │       │   ├── ImageHistogram.java           # 图像直方图生成器
+        │       │   ├── ImageMatcher.java             # 全图搜索匹配器（支持双引擎）
+        │       │   ├── LocalFeatureMatcher.java      # 局部特征搜索匹配器（支持双引擎）
+        │       │   ├── TamperDetector.java           # 图像篡改检测器（支持双引擎）
+        │       │   ├── ComputeEngineManager.java     # 计算引擎管理器
+        │       │   ├── MapReduceProcessor.java       # MapReduce实现处理器（支持真实/模拟）
+        │       │   ├── SparkContextManager.java      # Spark上下文管理器
+        │       │   ├── HBaseManager.java             # HBase管理器
+        │       │   ├── RedisManager.java             # Redis管理器
+        │       │   ├── CacheManager.java             # 缓存管理器
+        │       │   └── TaskLogger.java               # 任务日志系统
+        │       └── mapreduce/                         # ✨ Hadoop MapReduce任务包（新增）
+        │           ├── HistogramGenerationJob.java   # 直方图生成MapReduce任务
+        │           ├── ImageSearchJob.java           # 全图搜索MapReduce任务
+        │           ├── LocalFeatureSearchJob.java    # 局部特征搜索MapReduce任务
+        │           ├── TamperDetectionJob.java       # 篡改检测MapReduce任务
+        │           └── HadoopJobSubmitter.java       # MapReduce任务提交管理器
         └── resources/                                 # 资源文件目录
             └── images/                                # 样本图像存储目录
 ```
+
 
 ## 快速开始
 

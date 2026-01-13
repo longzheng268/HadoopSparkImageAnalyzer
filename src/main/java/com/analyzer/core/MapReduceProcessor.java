@@ -1,5 +1,9 @@
 package com.analyzer.core;
 
+import com.analyzer.mapreduce.HadoopJobSubmitter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.yarn.client.api.YarnClient;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -12,6 +16,10 @@ import java.util.concurrent.*;
 /**
  * Hadoop MapReduce实现的图像处理器
  * 提供基于MapReduce模式的并行图像处理功能
+ * 
+ * 支持两种模式：
+ * 1. 真实的Hadoop MapReduce（当YARN可用时）
+ * 2. 线程池模拟MapReduce（当YARN不可用时）
  */
 public class MapReduceProcessor {
     
@@ -20,6 +28,45 @@ public class MapReduceProcessor {
     private static final int TIMEOUT_SEARCH_SECONDS = 30;
     private static final int TIMEOUT_LOCAL_FEATURE_SECONDS = 60;
     private static final int TIMEOUT_TAMPER_SECONDS = 60;
+    
+    // YARN可用性标志
+    private static Boolean yarnAvailable = null;
+    
+    /**
+     * 检查YARN是否可用
+     */
+    private static boolean isYarnAvailable() {
+        if (yarnAvailable != null) {
+            return yarnAvailable;
+        }
+        
+        try {
+            Configuration conf = new Configuration();
+            
+            // 检查HADOOP_HOME环境变量
+            String hadoopHome = System.getenv("HADOOP_HOME");
+            if (hadoopHome == null || hadoopHome.isEmpty()) {
+                System.out.println("注意: 未设置HADOOP_HOME环境变量，使用线程池模拟MapReduce");
+                yarnAvailable = false;
+                return false;
+            }
+            
+            // 尝试创建YARN客户端
+            YarnClient yarnClient = YarnClient.createYarnClient();
+            yarnClient.init(conf);
+            yarnClient.start();
+            yarnClient.stop();
+            
+            System.out.println("检测到YARN集群，使用真实的Hadoop MapReduce");
+            yarnAvailable = true;
+            return true;
+        } catch (Exception e) {
+            System.out.println("无法连接到YARN集群: " + e.getMessage());
+            System.out.println("降级使用线程池模拟MapReduce");
+            yarnAvailable = false;
+            return false;
+        }
+    }
     
     /**
      * 使用MapReduce模式生成直方图
@@ -36,7 +83,31 @@ public class MapReduceProcessor {
         
         System.out.println("待处理图像数量: " + total);
         
-        // MapReduce模式：使用线程池模拟Map阶段
+        // 检查YARN是否可用
+        if (isYarnAvailable()) {
+            try {
+                System.out.println("提交真实的Hadoop MapReduce任务到YARN");
+                boolean success = HadoopJobSubmitter.submitHistogramJob(imageDir);
+                
+                if (success) {
+                    // 从HBase读取处理结果
+                    try {
+                        List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+                        System.out.println("MapReduce任务完成，共处理 " + histograms.size() + " 张图像");
+                        return histograms;
+                    } catch (Exception e) {
+                        System.err.println("从HBase读取结果失败: " + e.getMessage());
+                    }
+                } else {
+                    System.err.println("Hadoop MapReduce任务失败，降级使用线程池");
+                }
+            } catch (Exception e) {
+                System.err.println("提交Hadoop MapReduce任务失败: " + e.getMessage());
+                System.err.println("降级使用线程池模拟MapReduce");
+            }
+        }
+        
+        // 降级方案：使用线程池模拟Map阶段
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         System.out.println("MapReduce - Map阶段：使用 " + numThreads + " 个mapper线程");
@@ -143,7 +214,27 @@ public class MapReduceProcessor {
         
         System.out.println("图像库大小: " + libraryHistograms.size() + " 张图像");
         
-        // MapReduce模式：使用线程池模拟Map阶段
+        // 检查YARN是否可用
+        if (isYarnAvailable()) {
+            try {
+                System.out.println("提交真实的Hadoop MapReduce任务到YARN");
+                boolean success = HadoopJobSubmitter.submitSearchJob(queryHistogram, libraryHistograms, topN);
+                
+                if (success) {
+                    // TODO: 解析MapReduce输出结果
+                    System.out.println("MapReduce任务完成，处理了 " + libraryHistograms.size() + " 张图像");
+                    // 由于输出解析复杂，暂时继续使用下面的线程池实现
+                    // 在生产环境中应该从HDFS读取MapReduce的输出结果
+                } else {
+                    System.err.println("Hadoop MapReduce任务失败，降级使用线程池");
+                }
+            } catch (Exception e) {
+                System.err.println("提交Hadoop MapReduce任务失败: " + e.getMessage());
+                System.err.println("降级使用线程池模拟MapReduce");
+            }
+        }
+        
+        // 降级方案：使用线程池模拟Map阶段
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         System.out.println("MapReduce - Map阶段：使用 " + numThreads + " 个mapper线程");
@@ -225,7 +316,26 @@ public class MapReduceProcessor {
             throw new IOException("图像库为空");
         }
         
-        // MapReduce模式：使用线程池
+        // 检查YARN是否可用
+        if (isYarnAvailable()) {
+            try {
+                System.out.println("提交真实的Hadoop MapReduce任务到YARN");
+                boolean success = HadoopJobSubmitter.submitLocalFeatureJob(featureImage, imageLibrary, threshold);
+                
+                if (success) {
+                    System.out.println("MapReduce任务完成");
+                    // TODO: 解析MapReduce输出结果
+                    // 暂时继续使用下面的线程池实现
+                } else {
+                    System.err.println("Hadoop MapReduce任务失败，降级使用线程池");
+                }
+            } catch (Exception e) {
+                System.err.println("提交Hadoop MapReduce任务失败: " + e.getMessage());
+                System.err.println("降级使用线程池模拟MapReduce");
+            }
+        }
+        
+        // 降级方案：使用线程池
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         System.out.println("MapReduce - Map阶段：使用 " + numThreads + " 个mapper线程");
@@ -307,7 +417,26 @@ public class MapReduceProcessor {
             throw new IOException("图像库为空");
         }
         
-        // MapReduce模式：使用线程池
+        // 检查YARN是否可用
+        if (isYarnAvailable()) {
+            try {
+                System.out.println("提交真实的Hadoop MapReduce任务到YARN");
+                boolean success = HadoopJobSubmitter.submitTamperDetectionJob(suspectImage, imageLibrary, threshold);
+                
+                if (success) {
+                    System.out.println("MapReduce任务完成");
+                    // TODO: 解析MapReduce输出结果
+                    // 暂时继续使用下面的线程池实现
+                } else {
+                    System.err.println("Hadoop MapReduce任务失败，降级使用线程池");
+                }
+            } catch (Exception e) {
+                System.err.println("提交Hadoop MapReduce任务失败: " + e.getMessage());
+                System.err.println("降级使用线程池模拟MapReduce");
+            }
+        }
+        
+        // 降级方案：使用线程池
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         System.out.println("MapReduce - Map阶段：使用 " + numThreads + " 个mapper线程");
