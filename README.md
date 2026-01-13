@@ -4,6 +4,85 @@
 
 本项目是一个面向海量黑白图像数据的分布式处理与分析系统，利用 Hadoop 和 Spark 大数据技术，实现图像的高效处理、特征搜索、篡改检测及结果缓存。系统以 BOSSBase 图像数据库（1000 张 512×512 灰度图像）为数据源，通过分布式计算框架优化处理速度，支持全图搜索、局部特征匹配和篡改检查等核心功能。
 
+## 🆕 计算引擎选择
+
+系统支持在 **Hadoop MapReduce** 和 **Apache Spark** 两种计算引擎之间切换：
+
+- **默认引擎：Hadoop MapReduce**（推荐用于稳定环境）
+  - 使用线程池模拟Map和Reduce阶段
+  - 更好的环境兼容性
+  - 适合稳定的生产环境
+
+- **可选引擎：Apache Spark**（推荐用于高性能场景）
+  - 使用Spark RDD进行分布式并行计算
+  - 更高的处理效率
+  - 支持YARN集群模式
+
+**切换方法：**
+在GUI主界面右上角的"计算引擎"下拉菜单中选择即可。所有图像处理任务（直方图生成、全图搜索、局部特征搜索、篡改检测）都会使用选定的引擎执行。
+
+## 🚨 版本与安全说明
+
+### 推荐配置（安全版本）
+
+**⚠️ 强烈建议升级VM环境到以下版本：**
+
+- **Spark**: 3.3.3（修复已知安全漏洞）
+- **Hadoop**: 3.2.4（修复已知安全漏洞）
+- **HBase**: 2.2.7
+- **Redis**: 6.2.9
+- **Java**: 1.8+
+
+**当前build.gradle已配置为安全版本（3.3.3 / 3.2.4）**
+
+如果您的VM环境已经是这些版本，可以直接使用。如果VM环境是旧版本，请按照以下步骤升级。
+
+### VM环境升级步骤
+
+```bash
+# 1. 升级Hadoop到3.2.4
+wget https://archive.apache.org/dist/hadoop/core/hadoop-3.2.4/hadoop-3.2.4.tar.gz
+# 安装并配置...
+
+# 2. 升级Spark到3.3.3
+wget https://archive.apache.org/dist/spark/spark-3.3.3/spark-3.3.3-bin-hadoop3.tgz
+# 安装并配置...
+
+# 3. 验证
+hadoop version  # 应显示3.2.4
+spark-submit --version  # 应显示3.3.3
+```
+
+### ⚠️ 如果VM环境无法升级
+
+如果您的VM环境固定为Spark 3.1.2和Hadoop 3.2.0，存在以下问题：
+
+**版本兼容性问题：**
+- build.gradle中的新版本Jar包会与旧版本VM环境产生Protobuf冲突
+- 导致`ApplicationClientProtocolPB`错误
+
+**安全风险：**
+- ❌ Hadoop 3.2.0包含12个已知CVE漏洞（参数注入、堆溢出、路径遍历、权限管理）
+- ❌ Spark 3.1.2包含3个已知CVE漏洞（权限管理）
+- ⚠️ **不推荐在生产环境使用**
+
+**如果必须使用旧版本：**
+
+1. 修改`build.gradle`中的版本配置（有注释说明）
+2. **必须**阅读并实施 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md) 中的所有缓解措施
+3. 在隔离的网络环境中部署
+4. 只处理可信来源的数据
+5. 实施严格的访问控制
+6. 启用完整的审计日志
+
+详细的安全信息和缓解策略，请参阅 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md)。
+
+### ✅ 版本验证
+
+当前配置已通过编译测试：
+- ✅ Spark 3.3.3 + Hadoop 3.2.4: BUILD SUCCESSFUL
+- ⚠️ Spark 3.1.2 + Hadoop 3.2.0: BUILD SUCCESSFUL (但存在安全风险)
+
 ## 核心功能模块
 
 系统实现了以下四大核心业务模块，所有功能均可通过GUI界面操作：
@@ -196,7 +275,12 @@
 - **编程语言**：Java 1.8+
 - **构建工具**：Gradle
 - **GUI框架**：Java Swing
-- **大数据框架**：Hadoop、Spark（需手动启用依赖）
+- **大数据框架**：
+  - Hadoop MapReduce 3.2.0（默认计算引擎）
+  - Apache Spark 3.1.2（可选计算引擎）
+- **存储系统**：
+  - HBase 2.2.7（图像和直方图存储）
+  - Redis 6.2.9（搜索结果缓存，通过Jedis客户端）
 - **开发工具**：兼容 Eclipse IDE
 
 ## 项目结构
@@ -213,18 +297,23 @@ HadoopSparkImageAnalyzer/
     └── main/
         ├── java/
         │   └── com/analyzer/
-        │       ├── Main.java                      # 主程序入口（Swing GUI）
-        │       └── core/                          # 核心功能包
-        │           ├── CorePackageInfo.java      # 包信息
+        │       ├── Main.java                          # 主程序入口（Swing GUI）
+        │       └── core/                              # 核心功能包
+        │           ├── CorePackageInfo.java          # 包信息
         │           ├── ImageResourceDownloader.java  # 图像资源下载器
-        │           ├── ImageHistogram.java       # 图像直方图生成器
-        │           ├── ImageMatcher.java         # 全图搜索匹配器
-        │           ├── LocalFeatureMatcher.java  # 局部特征搜索匹配器
-        │           ├── TamperDetector.java       # 图像篡改检测器
-        │           ├── CacheManager.java         # 缓存管理器
-        │           └── TaskLogger.java           # 任务日志系统
-        └── resources/                             # 资源文件目录
-            └── images/                            # 样本图像存储目录
+        │           ├── ImageHistogram.java           # 图像直方图生成器
+        │           ├── ImageMatcher.java             # 全图搜索匹配器（支持双引擎）
+        │           ├── LocalFeatureMatcher.java      # 局部特征搜索匹配器（支持双引擎）
+        │           ├── TamperDetector.java           # 图像篡改检测器（支持双引擎）
+        │           ├── ComputeEngineManager.java     # 计算引擎管理器
+        │           ├── MapReduceProcessor.java       # MapReduce实现处理器
+        │           ├── SparkContextManager.java      # Spark上下文管理器
+        │           ├── HBaseManager.java             # HBase管理器
+        │           ├── RedisManager.java             # Redis管理器
+        │           ├── CacheManager.java             # 缓存管理器
+        │           └── TaskLogger.java               # 任务日志系统
+        └── resources/                                 # 资源文件目录
+            └── images/                                # 样本图像存储目录
 ```
 
 ## 快速开始

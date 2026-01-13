@@ -57,7 +57,46 @@ public class Main {
         // 标题标签
         JLabel titleLabel = new JLabel("HadoopSparkImageAnalyzer - 分布式图像分析系统", SwingConstants.CENTER);
         titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-        mainPanel.add(titleLabel, BorderLayout.NORTH);
+        
+        // 添加计算引擎选择器
+        JPanel titlePanel = new JPanel(new BorderLayout());
+        titlePanel.add(titleLabel, BorderLayout.CENTER);
+        
+        // 引擎选择面板
+        JPanel enginePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JLabel engineLabel = new JLabel("计算引擎: ");
+        engineLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        
+        String[] engines = {"Hadoop MapReduce", "Apache Spark"};
+        JComboBox<String> engineSelector = new JComboBox<>(engines);
+        engineSelector.setSelectedIndex(0); // 默认选择MapReduce
+        engineSelector.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        
+        // 引擎状态标签
+        JLabel engineStatusLabel = new JLabel("(" + ComputeEngineManager.getEngineStatus().split("\n")[0] + ")");
+        engineStatusLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 11));
+        
+        engineSelector.addActionListener(e -> {
+            String selected = (String) engineSelector.getSelectedItem();
+            if ("Hadoop MapReduce".equals(selected)) {
+                ComputeEngineManager.setEngine(ComputeEngineManager.EngineType.HADOOP_MAPREDUCE);
+            } else {
+                ComputeEngineManager.setEngine(ComputeEngineManager.EngineType.SPARK);
+            }
+            // 更新状态标签
+            engineStatusLabel.setText("(" + ComputeEngineManager.getEngineStatus().split("\n")[0] + ")");
+            JOptionPane.showMessageDialog(frame, 
+                "计算引擎已切换到: " + selected + "\n\n所有图像处理任务将使用该引擎执行。", 
+                "引擎切换", 
+                JOptionPane.INFORMATION_MESSAGE);
+        });
+        
+        enginePanel.add(engineLabel);
+        enginePanel.add(engineSelector);
+        enginePanel.add(engineStatusLabel);
+        titlePanel.add(enginePanel, BorderLayout.SOUTH);
+        
+        mainPanel.add(titlePanel, BorderLayout.NORTH);
 
         // 显示现有图像数量和HBase状态
         File imageDir = new File(IMAGE_RESOURCE_DIR);

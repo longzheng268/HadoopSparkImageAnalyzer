@@ -98,7 +98,7 @@ public class LocalFeatureMatcher {
     }
     
     /**
-     * 在图像库中搜索包含局部特征的图像（使用Spark RDD进行图像分割并行比对）
+     * 在图像库中搜索包含局部特征的图像（根据当前引擎使用Spark RDD或MapReduce进行图像分割并行比对）
      * 
      * @param featureImage 局部特征图像
      * @param imageLibrary 图像库目录
@@ -107,6 +107,11 @@ public class LocalFeatureMatcher {
      * @throws IOException 处理失败时抛出
      */
     public static List<LocalMatchResult> searchLocalFeature(File featureImage, File imageLibrary, double threshold) throws IOException {
+        // 根据当前计算引擎选择处理方式
+        if (ComputeEngineManager.isUsingMapReduce()) {
+            return MapReduceProcessor.searchLocalFeatureMapReduce(featureImage, imageLibrary, threshold);
+        }
+        
         System.out.println("=== 使用Spark RDD进行分布式局部特征搜索 ===");
         
         BufferedImage feature = ImageIO.read(featureImage);
@@ -230,5 +235,53 @@ public class LocalFeatureMatcher {
         }
         
         return matrix;
+    }
+    
+    /**
+     * 在单张图像中搜索局部特征（用于MapReduce）
+     * 
+     * @param featureImage 特征图像
+     * @param targetImage 目标图像
+     * @param threshold 相似度阈值
+     * @return 匹配结果
+     * @throws IOException 处理失败时抛出
+     */
+    public static LocalMatchResult matchInSingleImage(File featureImage, File targetImage, double threshold) throws IOException {
+        BufferedImage feature = ImageIO.read(featureImage);
+        BufferedImage target = ImageIO.read(targetImage);
+        
+        if (feature == null || target == null) {
+            return new LocalMatchResult(targetImage.getName());
+        }
+        
+        int featureWidth = feature.getWidth();
+        int featureHeight = feature.getHeight();
+        int targetWidth = target.getWidth();
+        int targetHeight = target.getHeight();
+        
+        LocalMatchResult result = new LocalMatchResult(targetImage.getName());
+        
+        // 如果特征图像大于目标图像，跳过
+        if (featureWidth > targetWidth || featureHeight > targetHeight) {
+            return result;
+        }
+        
+        // 获取灰度矩阵
+        int[][] featureMatrix = getGrayscaleMatrix(feature);
+        int[][] targetMatrix = getGrayscaleMatrix(target);
+        
+        // 滑动窗口搜索
+        for (int y = 0; y <= targetHeight - featureHeight; y++) {
+            for (int x = 0; x <= targetWidth - featureWidth; x++) {
+                double similarity = calculateRegionSimilarity(
+                    featureMatrix, targetMatrix, x, y, featureWidth, featureHeight);
+                
+                if (similarity >= threshold) {
+                    result.addLocation(x, y, similarity);
+                }
+            }
+        }
+        
+        return result;
     }
 }
