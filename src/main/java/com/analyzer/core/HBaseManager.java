@@ -253,6 +253,23 @@ public class HBaseManager {
     }
     
     /**
+     * 删除HBase中的图像
+     */
+    public static void deleteImage(String filename) throws IOException {
+        initialize();
+        
+        Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
+        
+        try {
+            Delete delete = new Delete(Bytes.toBytes(filename));
+            table.delete(delete);
+            System.out.println("已从HBase删除: " + filename);
+        } finally {
+            table.close();
+        }
+    }
+    
+    /**
      * 关闭HBase连接
      */
     public static synchronized void close() throws IOException {
