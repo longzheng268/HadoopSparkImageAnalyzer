@@ -67,11 +67,24 @@ public class SparkContextManager {
                     conf.remove("spark.executor.memory");
                     conf.remove("spark.executor.instances");
                     useYarn = false;
-                    sparkContext = new JavaSparkContext(conf);
-                    System.out.println("成功切换到Local模式（本地分布式）");
+                    
+                    try {
+                        sparkContext = new JavaSparkContext(conf);
+                        System.out.println("成功切换到Local模式（本地分布式）");
+                    } catch (Exception localEx) {
+                        // 本地模式也失败，抛出包含两次失败信息的异常
+                        throw new RuntimeException(
+                            "YARN模式初始化失败: " + e.getMessage() + 
+                            "; Local模式初始化也失败: " + localEx.getMessage(), 
+                            localEx
+                        );
+                    }
                 } else {
-                    // 如果已经是local模式还失败，则抛出异常
-                    throw e;
+                    // 如果已经是local模式还失败，抛出更具描述性的异常
+                    throw new RuntimeException(
+                        "Spark Local模式初始化失败: " + e.getMessage(), 
+                        e
+                    );
                 }
             }
             
