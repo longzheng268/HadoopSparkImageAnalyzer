@@ -9,9 +9,11 @@ version = '1.0.0'
 
 // 版本管理
 ext {
-    // 使用与环境兼容的版本: Spark 3.1.2, Hadoop 3.2.0
-    sparkVersion = '3.1.2'
-    hadoopVersion = '3.2.0'
+    // 使用安全的修补版本，解决已知漏洞
+    // 原环境版本: Spark 3.1.2, Hadoop 3.2.0
+    // 升级到最近的安全修补版本
+    sparkVersion = '3.3.3'     // 修复权限管理漏洞 (CVE-2023-32007, CVE-2022-33891)
+    hadoopVersion = '3.2.4'    // 修复多个安全漏洞 (参数注入、堆溢出、路径遍历)
     scala_version = '2.12'
 }
 
