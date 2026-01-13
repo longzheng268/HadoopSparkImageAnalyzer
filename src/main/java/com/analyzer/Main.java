@@ -1524,20 +1524,21 @@ public class Main {
                 for (int i = 0; i < selectedFiles.length; i++) {
                     File imageFile = selectedFiles[i];
                     final int current = i + 1;
+                    final String fileName = imageFile.getName();
                     
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(current);
                         statusLabel.setText(String.format("正在上传 %d/%d", current, selectedFiles.length));
-                        detailLabel.setText(imageFile.getName());
+                        detailLabel.setText(fileName);
                     });
                     
                     try {
                         ImageHistogram histogram = new ImageHistogram(imageFile);
                         HBaseManager.storeImage(imageFile, histogram);
                         successCount++;
-                        System.out.println("已上传: " + imageFile.getName());
+                        System.out.println("已上传: " + fileName);
                     } catch (Exception e) {
-                        System.err.println("上传失败: " + imageFile.getName() + " - " + e.getMessage());
+                        System.err.println("上传失败: " + fileName + " - " + e.getMessage());
                     }
                 }
                 return successCount;
@@ -1636,20 +1637,21 @@ public class Main {
                 for (int i = 0; i < images.size(); i++) {
                     File imageFile = images.get(i);
                     final int current = i + 1;
+                    final String fileName = imageFile.getName();
                     
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(current);
                         statusLabel.setText(String.format("正在上传 %d/%d", current, images.size()));
-                        detailLabel.setText(imageFile.getName());
+                        detailLabel.setText(fileName);
                     });
                     
                     try {
                         ImageHistogram histogram = new ImageHistogram(imageFile);
                         HBaseManager.storeImage(imageFile, histogram);
                         successCount++;
-                        System.out.println("已上传: " + imageFile.getName());
+                        System.out.println("已上传: " + fileName);
                     } catch (Exception e) {
-                        System.err.println("上传失败: " + imageFile.getName() + " - " + e.getMessage());
+                        System.err.println("上传失败: " + fileName + " - " + e.getMessage());
                     }
                 }
                 return successCount;
