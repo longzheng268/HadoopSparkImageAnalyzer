@@ -7,6 +7,12 @@ plugins {
 group = 'com.analyzer'
 version = '1.0.0'
 
+// 版本管理
+ext {
+    sparkVersion = '3.3.0'
+    hadoopVersion = '3.3.4'
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
@@ -22,9 +28,9 @@ dependencies {
     // implementation 'org.swinglabs:swingx:1.6.1'
 
     // Hadoop/Spark依赖（示例，需手动启用）
-    // implementation 'org.apache.spark:spark-core_2.12:3.3.0'
-    // implementation 'org.apache.hadoop:hadoop-client:3.3.4'
-    // implementation 'org.apache.hadoop:hadoop-common:3.3.4'
+    // implementation "org.apache.spark:spark-core_2.12:${sparkVersion}"
+    // implementation "org.apache.hadoop:hadoop-client:${hadoopVersion}"
+    // implementation "org.apache.hadoop:hadoop-common:${hadoopVersion}"
 }
 
 application {

@@ -31,7 +31,7 @@ public class Main {
 
         // 标题标签
         JLabel titleLabel = new JLabel("HadoopSparkImageAnalyzer", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("微软雅黑", Font.BOLD, 24));
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
         mainPanel.add(titleLabel, BorderLayout.NORTH);
 
         // 中间内容面板
@@ -60,6 +60,7 @@ public class Main {
 
         JButton exitButton = new JButton("退出程序");
         exitButton.addActionListener(e -> {
+            frame.dispose();
             System.exit(0);
         });
         buttonPanel.add(exitButton);
