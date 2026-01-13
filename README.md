@@ -23,6 +23,8 @@
 
 ## 版本对齐说明
 
+⚠️ **重要安全提示**: 查看 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md) 了解已知漏洞和缓解措施。
+
 为确保与虚拟机环境的兼容性，本项目使用以下版本：
 - **Spark**: 3.1.2（与VM环境对齐）
 - **Hadoop**: 3.2.0（与VM环境对齐）
@@ -31,6 +33,17 @@
 - **Java**: 1.8+
 
 这些版本已验证可以在Spark 3.1.2 + Hadoop 3.2.0的环境中正常工作，解决了之前版本不匹配导致的`ApplicationClientProtocolPB`错误。
+
+### ⚠️ 安全考虑
+
+由于VM环境限制，当前使用的Hadoop 3.2.0和Spark 3.1.2版本存在已知安全漏洞。**建议采取以下措施**：
+
+1. **网络隔离**: 在隔离的网络环境中部署
+2. **访问控制**: 使用最小权限原则
+3. **监控审计**: 启用完整的日志记录
+4. **输入验证**: 只处理可信来源的图像（已在代码中实现）
+
+详细的安全信息和缓解策略，请参阅 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md)。
 
 ## 核心功能模块
 
