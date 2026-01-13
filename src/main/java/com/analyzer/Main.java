@@ -28,24 +28,54 @@ public class Main {
      */
     private static void createAndShowGUI() {
         // 创建主窗口
-        JFrame frame = new JFrame("HadoopSparkImageAnalyzer - 图像分析系统");
+        JFrame frame = new JFrame("HadoopSparkImageAnalyzer - 分布式图像分析系统");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(800, 600);
         frame.setLocationRelativeTo(null); // 窗口居中显示
+        
+        // 添加窗口关闭时的清理操作
+        frame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                System.out.println("正在关闭系统资源...");
+                try {
+                    SparkContextManager.closeContext();
+                    HBaseManager.close();
+                    RedisManager.close();
+                } catch (Exception ex) {
+                    System.err.println("关闭资源时出错: " + ex.getMessage());
+                }
+                System.out.println("系统已关闭");
+            }
+        });
 
         // 创建主面板
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
         // 标题标签
-        JLabel titleLabel = new JLabel("HadoopSparkImageAnalyzer - 图像分析系统", SwingConstants.CENTER);
+        JLabel titleLabel = new JLabel("HadoopSparkImageAnalyzer - 分布式图像分析系统", SwingConstants.CENTER);
         titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
         mainPanel.add(titleLabel, BorderLayout.NORTH);
 
-        // 显示现有图像数量
+        // 显示现有图像数量和HBase状态
         File imageDir = new File(IMAGE_RESOURCE_DIR);
         List<File> existingImages = ImageResourceDownloader.getExistingImages(imageDir);
-        JLabel imageCountLabel = new JLabel("图像资源：" + existingImages.size() + " 张", SwingConstants.CENTER);
+        
+        // 检查HBase状态
+        String hbaseStatus = "未连接";
+        int hbaseCount = 0;
+        try {
+            hbaseCount = HBaseManager.getImageCount();
+            hbaseStatus = "已连接 (" + hbaseCount + " 条记录)";
+        } catch (Exception e) {
+            hbaseStatus = "连接失败";
+        }
+        
+        JLabel imageCountLabel = new JLabel(
+            "本地图像: " + existingImages.size() + " 张 | HBase: " + hbaseStatus, 
+            SwingConstants.CENTER
+        );
         imageCountLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         
         // 信息面板
@@ -92,10 +122,13 @@ public class Main {
         System.out.println("Java版本: " + System.getProperty("java.version"));
         System.out.println("工作目录: " + System.getProperty("user.dir"));
         System.out.println("图像资源目录: " + IMAGE_RESOURCE_DIR);
+        System.out.println("HBase状态: " + hbaseStatus);
+        System.out.println("Redis状态: " + (RedisManager.isAvailable() ? "已连接" : "未连接"));
         System.out.println("========================================");
         
         // 记录启动日志
-        TaskLogger.logTask("系统启动", TaskLogger.TaskStatus.COMPLETED, "系统成功启动，图像资源: " + existingImages.size() + " 张");
+        TaskLogger.logTask("系统启动", TaskLogger.TaskStatus.COMPLETED, 
+            "系统成功启动，本地图像: " + existingImages.size() + " 张, HBase: " + hbaseStatus);
     }
     
     /**
@@ -259,14 +292,14 @@ public class Main {
         JTextArea infoArea = new JTextArea();
         infoArea.setText("搜索结果缓存模块\n\n" +
             "功能说明：\n" +
-            "将搜索条件与搜索结果作为键值对缓存在Redis中（当前为内存模拟）。\n" +
+            "将搜索条件与搜索结果作为键值对缓存在Redis中。\n" +
             "缓存最近20条搜索结果（包括全图搜索、局部特征搜索、篡改检测）。\n\n" +
             "缓存策略：\n" +
             "- 每次搜索前，先查找缓存\n" +
             "- 若命中，直接返回并更新为最近访问\n" +
             "- 若未命中，执行搜索并缓存结果\n" +
             "- 超过20条时，自动移除最旧记录\n\n" +
-            "注：可配置Redis实现分布式缓存");
+            "注：使用真实Redis服务器（localhost:6379），若不可用则降级到内存缓存");
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
         infoArea.setWrapStyleWord(true);
@@ -282,7 +315,7 @@ public class Main {
         
         JButton clearButton = new JButton("清除缓存");
         clearButton.addActionListener(e -> {
-            CacheManager.clearCache();
+            RedisManager.clearCache();
             JOptionPane.showMessageDialog(parentFrame, "缓存已清除", "提示", JOptionPane.INFORMATION_MESSAGE);
         });
         buttonPanel.add(clearButton);
@@ -631,10 +664,10 @@ public class Main {
         }
         
         File queryImage = fileChooser.getSelectedFile();
-        String cacheKey = CacheManager.generateSearchKey(queryImage.getName());
+        String cacheKey = RedisManager.generateSearchKey(queryImage.getName());
         
         // 检查缓存
-        String cachedResult = CacheManager.get(cacheKey);
+        String cachedResult = RedisManager.get(cacheKey);
         if (cachedResult != null) {
             JOptionPane.showMessageDialog(parentFrame, 
                 "从缓存中获取结果:\n\n" + cachedResult, 
@@ -678,7 +711,7 @@ public class Main {
                     String resultStr = message.toString();
                     
                     // 缓存结果
-                    CacheManager.put(cacheKey, resultStr, "全图搜索");
+                    RedisManager.put(cacheKey, resultStr, "全图搜索");
                     
                     JOptionPane.showMessageDialog(parentFrame, 
                         resultStr, 
@@ -763,10 +796,10 @@ public class Main {
             return;
         }
         
-        String cacheKey = CacheManager.generateLocalFeatureKey(featureImage.getName(), threshold);
+        String cacheKey = RedisManager.generateLocalFeatureKey(featureImage.getName(), threshold);
         
         // 检查缓存
-        String cachedResult = CacheManager.get(cacheKey);
+        String cachedResult = RedisManager.get(cacheKey);
         if (cachedResult != null) {
             JOptionPane.showMessageDialog(parentFrame, 
                 "从缓存中获取结果:\n\n" + cachedResult, 
@@ -830,7 +863,7 @@ public class Main {
                     String resultStr = message.toString();
                     
                     // 缓存结果
-                    CacheManager.put(cacheKey, resultStr, "局部特征搜索");
+                    RedisManager.put(cacheKey, resultStr, "局部特征搜索");
                     
                     JOptionPane.showMessageDialog(parentFrame, 
                         resultStr, 
@@ -915,10 +948,10 @@ public class Main {
             return;
         }
         
-        String cacheKey = CacheManager.generateTamperKey(suspectImage.getName(), threshold);
+        String cacheKey = RedisManager.generateTamperKey(suspectImage.getName(), threshold);
         
         // 检查缓存
-        String cachedResult = CacheManager.get(cacheKey);
+        String cachedResult = RedisManager.get(cacheKey);
         if (cachedResult != null) {
             JOptionPane.showMessageDialog(parentFrame, 
                 "从缓存中获取结果:\n\n" + cachedResult, 
@@ -971,7 +1004,7 @@ public class Main {
                     String resultStr = message.toString();
                     
                     // 缓存结果
-                    CacheManager.put(cacheKey, resultStr, "篡改检测");
+                    RedisManager.put(cacheKey, resultStr, "篡改检测");
                     
                     JOptionPane.showMessageDialog(parentFrame, 
                         resultStr, 
@@ -1005,7 +1038,7 @@ public class Main {
      * 查看缓存统计
      */
     private static void viewCacheStats(JFrame parentFrame) {
-        String stats = CacheManager.getCacheStats();
+        String stats = RedisManager.getCacheStats();
         
         JTextArea textArea = new JTextArea(stats);
         textArea.setEditable(false);
