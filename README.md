@@ -4,6 +4,34 @@
 
 本项目是一个面向海量黑白图像数据的分布式处理与分析系统，利用 Hadoop 和 Spark 大数据技术，实现图像的高效处理、特征搜索、篡改检测及结果缓存。系统以 BOSSBase 图像数据库（1000 张 512×512 灰度图像）为数据源，通过分布式计算框架优化处理速度，支持全图搜索、局部特征匹配和篡改检查等核心功能。
 
+## 🆕 计算引擎选择
+
+系统支持在 **Hadoop MapReduce** 和 **Apache Spark** 两种计算引擎之间切换：
+
+- **默认引擎：Hadoop MapReduce**（推荐用于稳定环境）
+  - 使用线程池模拟Map和Reduce阶段
+  - 更好的环境兼容性
+  - 适合稳定的生产环境
+
+- **可选引擎：Apache Spark**（推荐用于高性能场景）
+  - 使用Spark RDD进行分布式并行计算
+  - 更高的处理效率
+  - 支持YARN集群模式
+
+**切换方法：**
+在GUI主界面右上角的"计算引擎"下拉菜单中选择即可。所有图像处理任务（直方图生成、全图搜索、局部特征搜索、篡改检测）都会使用选定的引擎执行。
+
+## 版本对齐说明
+
+为确保与虚拟机环境的兼容性，本项目使用以下版本：
+- **Spark**: 3.1.2（与VM环境对齐）
+- **Hadoop**: 3.2.0（与VM环境对齐）
+- **HBase**: 2.2.7
+- **Redis**: 6.2.9（通过Jedis 3.6.0客户端）
+- **Java**: 1.8+
+
+这些版本已验证可以在Spark 3.1.2 + Hadoop 3.2.0的环境中正常工作，解决了之前版本不匹配导致的`ApplicationClientProtocolPB`错误。
+
 ## 核心功能模块
 
 系统实现了以下四大核心业务模块，所有功能均可通过GUI界面操作：
@@ -196,7 +224,12 @@
 - **编程语言**：Java 1.8+
 - **构建工具**：Gradle
 - **GUI框架**：Java Swing
-- **大数据框架**：Hadoop、Spark（需手动启用依赖）
+- **大数据框架**：
+  - Hadoop MapReduce 3.2.0（默认计算引擎）
+  - Apache Spark 3.1.2（可选计算引擎）
+- **存储系统**：
+  - HBase 2.2.7（图像和直方图存储）
+  - Redis 6.2.9（搜索结果缓存，通过Jedis客户端）
 - **开发工具**：兼容 Eclipse IDE
 
 ## 项目结构
@@ -213,18 +246,23 @@ HadoopSparkImageAnalyzer/
     └── main/
         ├── java/
         │   └── com/analyzer/
-        │       ├── Main.java                      # 主程序入口（Swing GUI）
-        │       └── core/                          # 核心功能包
-        │           ├── CorePackageInfo.java      # 包信息
+        │       ├── Main.java                          # 主程序入口（Swing GUI）
+        │       └── core/                              # 核心功能包
+        │           ├── CorePackageInfo.java          # 包信息
         │           ├── ImageResourceDownloader.java  # 图像资源下载器
-        │           ├── ImageHistogram.java       # 图像直方图生成器
-        │           ├── ImageMatcher.java         # 全图搜索匹配器
-        │           ├── LocalFeatureMatcher.java  # 局部特征搜索匹配器
-        │           ├── TamperDetector.java       # 图像篡改检测器
-        │           ├── CacheManager.java         # 缓存管理器
-        │           └── TaskLogger.java           # 任务日志系统
-        └── resources/                             # 资源文件目录
-            └── images/                            # 样本图像存储目录
+        │           ├── ImageHistogram.java           # 图像直方图生成器
+        │           ├── ImageMatcher.java             # 全图搜索匹配器（支持双引擎）
+        │           ├── LocalFeatureMatcher.java      # 局部特征搜索匹配器（支持双引擎）
+        │           ├── TamperDetector.java           # 图像篡改检测器（支持双引擎）
+        │           ├── ComputeEngineManager.java     # 计算引擎管理器
+        │           ├── MapReduceProcessor.java       # MapReduce实现处理器
+        │           ├── SparkContextManager.java      # Spark上下文管理器
+        │           ├── HBaseManager.java             # HBase管理器
+        │           ├── RedisManager.java             # Redis管理器
+        │           ├── CacheManager.java             # 缓存管理器
+        │           └── TaskLogger.java               # 任务日志系统
+        └── resources/                                 # 资源文件目录
+            └── images/                                # 样本图像存储目录
 ```
 
 ## 快速开始
