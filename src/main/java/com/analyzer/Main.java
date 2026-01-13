@@ -5,6 +5,7 @@ import com.analyzer.core.*;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
 
@@ -90,23 +91,27 @@ public class Main {
         JPanel dataCleaningPanel = createDataCleaningPanel(frame, imageCountLabel);
         tabbedPane.addTab("数据清洗", dataCleaningPanel);
         
-        // 2. 图像搜索面板
+        // 2. HBase图像管理面板
+        JPanel hbasePanel = createHBaseManagementPanel(frame, imageCountLabel);
+        tabbedPane.addTab("HBase图像管理", hbasePanel);
+        
+        // 3. 图像搜索面板
         JPanel searchPanel = createSearchPanel(frame);
         tabbedPane.addTab("图像搜索", searchPanel);
         
-        // 3. 局部特征搜索面板
+        // 4. 局部特征搜索面板
         JPanel localSearchPanel = createLocalSearchPanel(frame);
         tabbedPane.addTab("局部特征搜索", localSearchPanel);
         
-        // 4. 篡改检测面板
+        // 5. 篡改检测面板
         JPanel tamperPanel = createTamperDetectionPanel(frame);
         tabbedPane.addTab("篡改检测", tamperPanel);
         
-        // 5. 缓存管理面板
+        // 6. 缓存管理面板
         JPanel cachePanel = createCachePanel(frame);
         tabbedPane.addTab("缓存管理", cachePanel);
         
-        // 6. 日志系统面板
+        // 7. 日志系统面板
         JPanel logPanel = createLogPanel(frame);
         tabbedPane.addTab("日志系统", logPanel);
 
@@ -167,6 +172,53 @@ public class Main {
         JButton viewButton = new JButton("查看已有图像");
         viewButton.addActionListener(e -> viewExistingImages(parentFrame));
         buttonPanel.add(viewButton);
+        
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    /**
+     * 创建HBase图像管理面板
+     */
+    private static JPanel createHBaseManagementPanel(JFrame parentFrame, JLabel imageCountLabel) {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        // 说明文本
+        JTextArea infoArea = new JTextArea();
+        infoArea.setText("HBase图像管理模块\n\n" +
+            "功能说明：\n" +
+            "1. 查看HBase图像：查看存储在HBase中的所有图像\n" +
+            "2. 上传本地图像：将本地图像上传到HBase\n" +
+            "3. 删除HBase图像：从HBase中删除指定图像\n" +
+            "4. 批量上传：将本地目录中所有图像批量上传到HBase\n\n" +
+            "注：图像上传后可在全图搜索、局部特征搜索、篡改检测中使用");
+        infoArea.setEditable(false);
+        infoArea.setLineWrap(true);
+        infoArea.setWrapStyleWord(true);
+        infoArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane scrollPane = new JScrollPane(infoArea);
+        panel.add(scrollPane, BorderLayout.CENTER);
+        
+        // 按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        
+        JButton viewHBaseButton = new JButton("查看HBase图像");
+        viewHBaseButton.addActionListener(e -> viewHBaseImages(parentFrame));
+        buttonPanel.add(viewHBaseButton);
+        
+        JButton uploadButton = new JButton("上传本地图像到HBase");
+        uploadButton.addActionListener(e -> uploadLocalImageToHBase(parentFrame, imageCountLabel));
+        buttonPanel.add(uploadButton);
+        
+        JButton batchUploadButton = new JButton("批量上传到HBase");
+        batchUploadButton.addActionListener(e -> batchUploadToHBase(parentFrame, imageCountLabel));
+        buttonPanel.add(batchUploadButton);
+        
+        JButton deleteButton = new JButton("删除HBase图像");
+        deleteButton.addActionListener(e -> deleteHBaseImage(parentFrame, imageCountLabel));
+        buttonPanel.add(deleteButton);
         
         panel.add(buttonPanel, BorderLayout.SOUTH);
         
@@ -641,30 +693,117 @@ public class Main {
      * 执行全图搜索
      */
     private static void performImageSearch(JFrame parentFrame) {
-        File imageDir = new File(IMAGE_RESOURCE_DIR);
-        List<File> images = ImageResourceDownloader.getExistingImages(imageDir);
+        // 先询问用户从哪里选择查询图像
+        String[] options = {"从本地文件选择", "从HBase选择"};
+        int choice = JOptionPane.showOptionDialog(parentFrame,
+            "请选择查询图像来源：",
+            "选择图像来源",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]);
         
-        if (images.isEmpty()) {
-            JOptionPane.showMessageDialog(parentFrame, 
-                "暂无图像资源！\n请先下载样本图像。", 
-                "提示", 
-                JOptionPane.INFORMATION_MESSAGE);
-            return;
+        if (choice == -1) {
+            return; // 用户取消
         }
         
-        // 选择查询图像
-        JFileChooser fileChooser = new JFileChooser(imageDir);
-        fileChooser.setDialogTitle("选择查询图像");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
-            "jpg", "jpeg", "png", "bmp"));
+        File queryImage = null;
+        String queryImageName = null;
         
-        int result = fileChooser.showOpenDialog(parentFrame);
-        if (result != JFileChooser.APPROVE_OPTION) {
-            return;
+        if (choice == 0) {
+            // 从本地文件选择
+            File imageDir = new File(IMAGE_RESOURCE_DIR);
+            JFileChooser fileChooser = new JFileChooser(imageDir);
+            fileChooser.setDialogTitle("选择查询图像");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
+                "jpg", "jpeg", "png", "bmp"));
+            
+            int result = fileChooser.showOpenDialog(parentFrame);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            
+            queryImage = fileChooser.getSelectedFile();
+            queryImageName = queryImage.getName();
+            
+            // 询问是否上传到HBase
+            int upload = JOptionPane.showConfirmDialog(parentFrame,
+                "是否将此图像上传到HBase以便后续使用？",
+                "上传到HBase",
+                JOptionPane.YES_NO_OPTION);
+            
+            if (upload == JOptionPane.YES_OPTION) {
+                try {
+                    ImageHistogram histogram = new ImageHistogram(queryImage);
+                    HBaseManager.storeImage(queryImage, histogram);
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "图像已上传到HBase！",
+                        "上传成功",
+                        JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception ex) {
+                    System.err.println("上传到HBase失败: " + ex.getMessage());
+                }
+            }
+        } else {
+            // 从HBase选择
+            try {
+                List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+                
+                if (histograms.isEmpty()) {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "HBase中暂无图像！\n请先使用\"HBase图像管理\"功能上传图像。",
+                        "提示",
+                        JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                
+                String[] imageNames = new String[histograms.size()];
+                for (int i = 0; i < histograms.size(); i++) {
+                    imageNames[i] = histograms.get(i).getFilename();
+                }
+                
+                queryImageName = (String) JOptionPane.showInputDialog(
+                    parentFrame,
+                    "选择HBase中的查询图像:",
+                    "选择查询图像",
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    imageNames,
+                    imageNames[0]
+                );
+                
+                if (queryImageName == null) {
+                    return;
+                }
+                
+                // 从HBase下载图像到临时文件
+                BufferedImage img = HBaseManager.getImage(queryImageName);
+                if (img != null) {
+                    queryImage = File.createTempFile("hbase_query_", ".png");
+                    queryImage.deleteOnExit();
+                    javax.imageio.ImageIO.write(img, "png", queryImage);
+                } else {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "从HBase读取图像失败！",
+                        "错误",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parentFrame,
+                    "从HBase选择图像失败: " + ex.getMessage(),
+                    "错误",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
         }
         
-        File queryImage = fileChooser.getSelectedFile();
-        String cacheKey = RedisManager.generateSearchKey(queryImage.getName());
+        final File finalQueryImage = queryImage;
+        final String finalQueryImageName = queryImageName;
+        
+        String cacheKey = RedisManager.generateSearchKey(finalQueryImageName);
         
         // 检查缓存
         String cachedResult = RedisManager.get(cacheKey);
@@ -676,8 +815,26 @@ public class Main {
             return;
         }
         
+        // 检查图像库是否为空
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        List<File> localImages = ImageResourceDownloader.getExistingImages(imageDir);
+        int hbaseCount = 0;
+        try {
+            hbaseCount = HBaseManager.getImageCount();
+        } catch (Exception e) {
+            // HBase不可用
+        }
+        
+        if (localImages.isEmpty() && hbaseCount == 0) {
+            JOptionPane.showMessageDialog(parentFrame,
+                "图像库为空！\n本地文件: 0 张\nHBase: 0 张\n\n请先下载样本图像或上传图像到HBase。",
+                "提示",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
         // 记录任务开始
-        TaskLogger.logTask("全图搜索", TaskLogger.TaskStatus.STARTED, "查询图像: " + queryImage.getName());
+        TaskLogger.logTask("全图搜索", TaskLogger.TaskStatus.STARTED, "查询图像: " + finalQueryImageName);
         
         // 创建进度对话框
         JDialog progressDialog = new JDialog(parentFrame, "搜索中", true);
@@ -691,7 +848,7 @@ public class Main {
         SwingWorker<List<ImageMatcher.MatchResult>, Void> worker = new SwingWorker<List<ImageMatcher.MatchResult>, Void>() {
             @Override
             protected List<ImageMatcher.MatchResult> doInBackground() throws Exception {
-                return ImageMatcher.searchImage(queryImage, imageDir, 5);
+                return ImageMatcher.searchImage(finalQueryImage, imageDir, 5);
             }
             
             @Override
@@ -701,7 +858,7 @@ public class Main {
                     progressDialog.dispose();
                     
                     StringBuilder message = new StringBuilder();
-                    message.append("查询图像: ").append(queryImage.getName()).append("\n\n");
+                    message.append("查询图像: ").append(finalQueryImageName).append("\n\n");
                     message.append("找到 ").append(results.size()).append(" 个最匹配的结果:\n\n");
                     
                     for (int i = 0; i < results.size(); i++) {
@@ -720,7 +877,7 @@ public class Main {
                     
                     // 记录任务完成
                     TaskLogger.logTask("全图搜索", TaskLogger.TaskStatus.COMPLETED, 
-                        "查询图像: " + queryImage.getName() + ", 找到 " + results.size() + " 个结果");
+                        "查询图像: " + finalQueryImageName + ", 找到 " + results.size() + " 个结果");
                     
                 } catch (Exception ex) {
                     progressDialog.dispose();
@@ -745,29 +902,114 @@ public class Main {
      * 执行局部特征搜索
      */
     private static void performLocalFeatureSearch(JFrame parentFrame) {
-        File imageDir = new File(IMAGE_RESOURCE_DIR);
-        List<File> images = ImageResourceDownloader.getExistingImages(imageDir);
+        // 先询问用户从哪里选择特征图像
+        String[] options = {"从本地文件选择", "从HBase选择"};
+        int choice = JOptionPane.showOptionDialog(parentFrame,
+            "请选择特征图像来源：",
+            "选择图像来源",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]);
         
-        if (images.isEmpty()) {
-            JOptionPane.showMessageDialog(parentFrame, 
-                "暂无图像资源！\n请先下载样本图像。", 
-                "提示", 
+        if (choice == -1) {
+            return; // 用户取消
+        }
+        
+        File featureImage = null;
+        String featureImageName = null;
+        
+        if (choice == 0) {
+            // 从本地文件选择
+            File imageDir = new File(IMAGE_RESOURCE_DIR);
+            JFileChooser fileChooser = new JFileChooser(imageDir);
+            fileChooser.setDialogTitle("选择局部特征图像");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
+                "jpg", "jpeg", "png", "bmp"));
+            
+            int result = fileChooser.showOpenDialog(parentFrame);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            
+            featureImage = fileChooser.getSelectedFile();
+            featureImageName = featureImage.getName();
+        } else {
+            // 从HBase选择
+            try {
+                List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+                
+                if (histograms.isEmpty()) {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "HBase中暂无图像！\n请先使用\"HBase图像管理\"功能上传图像。",
+                        "提示",
+                        JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                
+                String[] imageNames = new String[histograms.size()];
+                for (int i = 0; i < histograms.size(); i++) {
+                    imageNames[i] = histograms.get(i).getFilename();
+                }
+                
+                featureImageName = (String) JOptionPane.showInputDialog(
+                    parentFrame,
+                    "选择HBase中的特征图像:",
+                    "选择特征图像",
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    imageNames,
+                    imageNames[0]
+                );
+                
+                if (featureImageName == null) {
+                    return;
+                }
+                
+                // 从HBase下载图像到临时文件
+                BufferedImage img = HBaseManager.getImage(featureImageName);
+                if (img != null) {
+                    featureImage = File.createTempFile("hbase_feature_", ".png");
+                    featureImage.deleteOnExit();
+                    javax.imageio.ImageIO.write(img, "png", featureImage);
+                } else {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "从HBase读取图像失败！",
+                        "错误",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parentFrame,
+                    "从HBase选择图像失败: " + ex.getMessage(),
+                    "错误",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+        
+        final File finalFeatureImage = featureImage;
+        final String finalFeatureImageName = featureImageName;
+        
+        // 检查图像库是否为空
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        List<File> localImages = ImageResourceDownloader.getExistingImages(imageDir);
+        int hbaseCount = 0;
+        try {
+            hbaseCount = HBaseManager.getImageCount();
+        } catch (Exception e) {
+            // HBase不可用
+        }
+        
+        if (localImages.isEmpty() && hbaseCount == 0) {
+            JOptionPane.showMessageDialog(parentFrame,
+                "图像库为空！\n本地文件: 0 张\nHBase: 0 张\n\n请先下载样本图像或上传图像到HBase。",
+                "提示",
                 JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        
-        // 选择特征图像
-        JFileChooser fileChooser = new JFileChooser(imageDir);
-        fileChooser.setDialogTitle("选择局部特征图像");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
-            "jpg", "jpeg", "png", "bmp"));
-        
-        int result = fileChooser.showOpenDialog(parentFrame);
-        if (result != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        
-        File featureImage = fileChooser.getSelectedFile();
         
         // 输入相似度阈值
         String thresholdStr = JOptionPane.showInputDialog(parentFrame, 
@@ -796,7 +1038,7 @@ public class Main {
             return;
         }
         
-        String cacheKey = RedisManager.generateLocalFeatureKey(featureImage.getName(), threshold);
+        String cacheKey = RedisManager.generateLocalFeatureKey(finalFeatureImageName, threshold);
         
         // 检查缓存
         String cachedResult = RedisManager.get(cacheKey);
@@ -810,7 +1052,7 @@ public class Main {
         
         // 记录任务开始
         TaskLogger.logTask("局部特征搜索", TaskLogger.TaskStatus.STARTED, 
-            "特征图像: " + featureImage.getName() + ", 阈值: " + threshold);
+            "特征图像: " + finalFeatureImageName + ", 阈值: " + threshold);
         
         // 创建进度对话框
         JDialog progressDialog = new JDialog(parentFrame, "搜索中", true);
@@ -826,7 +1068,7 @@ public class Main {
             new SwingWorker<List<LocalFeatureMatcher.LocalMatchResult>, Void>() {
             @Override
             protected List<LocalFeatureMatcher.LocalMatchResult> doInBackground() throws Exception {
-                return LocalFeatureMatcher.searchLocalFeature(featureImage, imageDir, finalThreshold);
+                return LocalFeatureMatcher.searchLocalFeature(finalFeatureImage, imageDir, finalThreshold);
             }
             
             @Override
@@ -836,7 +1078,7 @@ public class Main {
                     progressDialog.dispose();
                     
                     StringBuilder message = new StringBuilder();
-                    message.append("特征图像: ").append(featureImage.getName()).append("\n");
+                    message.append("特征图像: ").append(finalFeatureImageName).append("\n");
                     message.append("相似度阈值: ").append(String.format("%.2f%%", finalThreshold * 100)).append("\n\n");
                     
                     int totalMatches = 0;
@@ -872,7 +1114,7 @@ public class Main {
                     
                     // 记录任务完成
                     TaskLogger.logTask("局部特征搜索", TaskLogger.TaskStatus.COMPLETED, 
-                        "特征图像: " + featureImage.getName() + ", 找到 " + totalMatches + " 个匹配");
+                        "特征图像: " + finalFeatureImageName + ", 找到 " + totalMatches + " 个匹配");
                     
                 } catch (Exception ex) {
                     progressDialog.dispose();
@@ -897,29 +1139,114 @@ public class Main {
      * 执行篡改检测
      */
     private static void performTamperDetection(JFrame parentFrame) {
-        File imageDir = new File(IMAGE_RESOURCE_DIR);
-        List<File> images = ImageResourceDownloader.getExistingImages(imageDir);
+        // 先询问用户从哪里选择疑似篡改图像
+        String[] options = {"从本地文件选择", "从HBase选择"};
+        int choice = JOptionPane.showOptionDialog(parentFrame,
+            "请选择疑似篡改图像来源：",
+            "选择图像来源",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]);
         
-        if (images.isEmpty()) {
-            JOptionPane.showMessageDialog(parentFrame, 
-                "暂无图像资源！\n请先下载样本图像。", 
-                "提示", 
+        if (choice == -1) {
+            return; // 用户取消
+        }
+        
+        File suspectImage = null;
+        String suspectImageName = null;
+        
+        if (choice == 0) {
+            // 从本地文件选择
+            File imageDir = new File(IMAGE_RESOURCE_DIR);
+            JFileChooser fileChooser = new JFileChooser(imageDir);
+            fileChooser.setDialogTitle("选择疑似篡改图像");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
+                "jpg", "jpeg", "png", "bmp"));
+            
+            int result = fileChooser.showOpenDialog(parentFrame);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            
+            suspectImage = fileChooser.getSelectedFile();
+            suspectImageName = suspectImage.getName();
+        } else {
+            // 从HBase选择
+            try {
+                List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+                
+                if (histograms.isEmpty()) {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "HBase中暂无图像！\n请先使用\"HBase图像管理\"功能上传图像。",
+                        "提示",
+                        JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                
+                String[] imageNames = new String[histograms.size()];
+                for (int i = 0; i < histograms.size(); i++) {
+                    imageNames[i] = histograms.get(i).getFilename();
+                }
+                
+                suspectImageName = (String) JOptionPane.showInputDialog(
+                    parentFrame,
+                    "选择HBase中的疑似篡改图像:",
+                    "选择疑似篡改图像",
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    imageNames,
+                    imageNames[0]
+                );
+                
+                if (suspectImageName == null) {
+                    return;
+                }
+                
+                // 从HBase下载图像到临时文件
+                BufferedImage img = HBaseManager.getImage(suspectImageName);
+                if (img != null) {
+                    suspectImage = File.createTempFile("hbase_suspect_", ".png");
+                    suspectImage.deleteOnExit();
+                    javax.imageio.ImageIO.write(img, "png", suspectImage);
+                } else {
+                    JOptionPane.showMessageDialog(parentFrame,
+                        "从HBase读取图像失败！",
+                        "错误",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(parentFrame,
+                    "从HBase选择图像失败: " + ex.getMessage(),
+                    "错误",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+        
+        final File finalSuspectImage = suspectImage;
+        final String finalSuspectImageName = suspectImageName;
+        
+        // 检查图像库是否为空
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        List<File> localImages = ImageResourceDownloader.getExistingImages(imageDir);
+        int hbaseCount = 0;
+        try {
+            hbaseCount = HBaseManager.getImageCount();
+        } catch (Exception e) {
+            // HBase不可用
+        }
+        
+        if (localImages.isEmpty() && hbaseCount == 0) {
+            JOptionPane.showMessageDialog(parentFrame,
+                "图像库为空！\n本地文件: 0 张\nHBase: 0 张\n\n请先下载样本图像或上传图像到HBase。",
+                "提示",
                 JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        
-        // 选择疑似篡改图像
-        JFileChooser fileChooser = new JFileChooser(imageDir);
-        fileChooser.setDialogTitle("选择疑似篡改图像");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
-            "jpg", "jpeg", "png", "bmp"));
-        
-        int result = fileChooser.showOpenDialog(parentFrame);
-        if (result != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        
-        File suspectImage = fileChooser.getSelectedFile();
         
         // 输入差异阈值
         String thresholdStr = JOptionPane.showInputDialog(parentFrame, 
@@ -948,7 +1275,7 @@ public class Main {
             return;
         }
         
-        String cacheKey = RedisManager.generateTamperKey(suspectImage.getName(), threshold);
+        String cacheKey = RedisManager.generateTamperKey(finalSuspectImageName, threshold);
         
         // 检查缓存
         String cachedResult = RedisManager.get(cacheKey);
@@ -962,7 +1289,7 @@ public class Main {
         
         // 记录任务开始
         TaskLogger.logTask("篡改检测", TaskLogger.TaskStatus.STARTED, 
-            "疑似篡改图像: " + suspectImage.getName() + ", 阈值: " + threshold);
+            "疑似篡改图像: " + finalSuspectImageName + ", 阈值: " + threshold);
         
         // 创建进度对话框
         JDialog progressDialog = new JDialog(parentFrame, "检测中", true);
@@ -978,7 +1305,7 @@ public class Main {
             new SwingWorker<List<TamperDetector.TamperResult>, Void>() {
             @Override
             protected List<TamperDetector.TamperResult> doInBackground() throws Exception {
-                return TamperDetector.detectTampering(suspectImage, imageDir, finalThreshold);
+                return TamperDetector.detectTampering(finalSuspectImage, imageDir, finalThreshold);
             }
             
             @Override
@@ -988,7 +1315,7 @@ public class Main {
                     progressDialog.dispose();
                     
                     StringBuilder message = new StringBuilder();
-                    message.append("疑似篡改图像: ").append(suspectImage.getName()).append("\n");
+                    message.append("疑似篡改图像: ").append(finalSuspectImageName).append("\n");
                     message.append("差异阈值: ").append(finalThreshold).append("\n\n");
                     
                     if (results.isEmpty()) {
@@ -1013,7 +1340,7 @@ public class Main {
                     
                     // 记录任务完成
                     TaskLogger.logTask("篡改检测", TaskLogger.TaskStatus.COMPLETED, 
-                        "疑似篡改图像: " + suspectImage.getName() + ", 检测完成");
+                        "疑似篡改图像: " + finalSuspectImageName + ", 检测完成");
                     
                 } catch (Exception ex) {
                     progressDialog.dispose();
@@ -1089,5 +1416,366 @@ public class Main {
             scrollPane, 
             "任务日志", 
             JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    /**
+     * 查看HBase中的图像
+     */
+    private static void viewHBaseImages(JFrame parentFrame) {
+        try {
+            List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+            
+            if (histograms.isEmpty()) {
+                JOptionPane.showMessageDialog(parentFrame, 
+                    "HBase中暂无图像数据！\n请先使用\"上传本地图像到HBase\"功能上传图像。", 
+                    "提示", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+            // 显示图像列表
+            StringBuilder message = new StringBuilder();
+            message.append("HBase中共有 ").append(histograms.size()).append(" 张图像:\n\n");
+            message.append("图像列表:\n");
+            
+            int displayCount = Math.min(histograms.size(), 30);
+            for (int i = 0; i < displayCount; i++) {
+                ImageHistogram h = histograms.get(i);
+                message.append(String.format("  %d. %s (%dx%d)\n", 
+                    i + 1, h.getFilename(), h.getWidth(), h.getHeight()));
+            }
+            
+            if (histograms.size() > 30) {
+                message.append("  ... 以及其他 ").append(histograms.size() - 30).append(" 张图像\n");
+            }
+            
+            JTextArea textArea = new JTextArea(message.toString());
+            textArea.setEditable(false);
+            textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            scrollPane.setPreferredSize(new Dimension(500, 400));
+            
+            JOptionPane.showMessageDialog(parentFrame, 
+                scrollPane, 
+                "HBase图像列表", 
+                JOptionPane.INFORMATION_MESSAGE);
+                
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(parentFrame, 
+                "查看HBase图像失败: " + ex.getMessage() + "\n\n" +
+                "请确保HBase服务已启动。", 
+                "错误", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    /**
+     * 上传本地图像到HBase
+     */
+    private static void uploadLocalImageToHBase(JFrame parentFrame, JLabel imageCountLabel) {
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        
+        // 选择要上传的图像
+        JFileChooser fileChooser = new JFileChooser(imageDir);
+        fileChooser.setDialogTitle("选择要上传到HBase的图像");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("图像文件 (*.jpg, *.jpeg, *.png, *.bmp)", 
+            "jpg", "jpeg", "png", "bmp"));
+        fileChooser.setMultiSelectionEnabled(true);
+        
+        int result = fileChooser.showOpenDialog(parentFrame);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        
+        File[] selectedFiles = fileChooser.getSelectedFiles();
+        if (selectedFiles.length == 0) {
+            return;
+        }
+        
+        // 记录任务开始
+        TaskLogger.logTask("上传图像到HBase", TaskLogger.TaskStatus.STARTED, 
+            "开始上传 " + selectedFiles.length + " 张图像");
+        
+        // 创建进度对话框
+        JDialog progressDialog = new JDialog(parentFrame, "上传到HBase", true);
+        progressDialog.setSize(400, 150);
+        progressDialog.setLocationRelativeTo(parentFrame);
+        progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        
+        JPanel progressPanel = new JPanel(new BorderLayout(10, 10));
+        progressPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        
+        JLabel statusLabel = new JLabel("准备上传...", SwingConstants.CENTER);
+        progressPanel.add(statusLabel, BorderLayout.NORTH);
+        
+        JProgressBar progressBar = new JProgressBar(0, selectedFiles.length);
+        progressBar.setStringPainted(true);
+        progressPanel.add(progressBar, BorderLayout.CENTER);
+        
+        JLabel detailLabel = new JLabel("", SwingConstants.CENTER);
+        progressPanel.add(detailLabel, BorderLayout.SOUTH);
+        
+        progressDialog.setContentPane(progressPanel);
+        
+        SwingWorker<Integer, Void> worker = new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                int successCount = 0;
+                for (int i = 0; i < selectedFiles.length; i++) {
+                    File imageFile = selectedFiles[i];
+                    final int current = i + 1;
+                    
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setValue(current);
+                        statusLabel.setText(String.format("正在上传 %d/%d", current, selectedFiles.length));
+                        detailLabel.setText(imageFile.getName());
+                    });
+                    
+                    try {
+                        ImageHistogram histogram = new ImageHistogram(imageFile);
+                        HBaseManager.storeImage(imageFile, histogram);
+                        successCount++;
+                        System.out.println("已上传: " + imageFile.getName());
+                    } catch (Exception e) {
+                        System.err.println("上传失败: " + imageFile.getName() + " - " + e.getMessage());
+                    }
+                }
+                return successCount;
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    Integer successCount = get();
+                    progressDialog.dispose();
+                    
+                    JOptionPane.showMessageDialog(parentFrame, 
+                        String.format("成功上传 %d/%d 张图像到HBase！", successCount, selectedFiles.length), 
+                        "上传完成", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // 更新图像数量显示
+                    updateImageCountLabel(imageCountLabel);
+                    
+                    // 记录任务完成
+                    TaskLogger.logTask("上传图像到HBase", TaskLogger.TaskStatus.COMPLETED, 
+                        "成功上传 " + successCount + " 张图像");
+                    
+                } catch (Exception ex) {
+                    progressDialog.dispose();
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(parentFrame, 
+                        "上传失败: " + cause.getMessage(), 
+                        "错误", 
+                        JOptionPane.ERROR_MESSAGE);
+                    
+                    // 记录任务失败
+                    TaskLogger.logTask("上传图像到HBase", TaskLogger.TaskStatus.FAILED, 
+                        "错误: " + cause.getMessage());
+                }
+            }
+        };
+        
+        worker.execute();
+        progressDialog.setVisible(true);
+    }
+    
+    /**
+     * 批量上传本地图像到HBase
+     */
+    private static void batchUploadToHBase(JFrame parentFrame, JLabel imageCountLabel) {
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        List<File> images = ImageResourceDownloader.getExistingImages(imageDir);
+        
+        if (images.isEmpty()) {
+            JOptionPane.showMessageDialog(parentFrame, 
+                "本地暂无图像资源！\n请先下载样本图像。", 
+                "提示", 
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        int confirm = JOptionPane.showConfirmDialog(parentFrame, 
+            String.format("确定要将本地 %d 张图像批量上传到HBase吗？", images.size()), 
+            "确认", 
+            JOptionPane.YES_NO_OPTION);
+            
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+        
+        // 记录任务开始
+        TaskLogger.logTask("批量上传到HBase", TaskLogger.TaskStatus.STARTED, 
+            "开始上传 " + images.size() + " 张图像");
+        
+        // 创建进度对话框
+        JDialog progressDialog = new JDialog(parentFrame, "批量上传到HBase", true);
+        progressDialog.setSize(400, 150);
+        progressDialog.setLocationRelativeTo(parentFrame);
+        progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        
+        JPanel progressPanel = new JPanel(new BorderLayout(10, 10));
+        progressPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        
+        JLabel statusLabel = new JLabel("准备上传...", SwingConstants.CENTER);
+        progressPanel.add(statusLabel, BorderLayout.NORTH);
+        
+        JProgressBar progressBar = new JProgressBar(0, images.size());
+        progressBar.setStringPainted(true);
+        progressPanel.add(progressBar, BorderLayout.CENTER);
+        
+        JLabel detailLabel = new JLabel("", SwingConstants.CENTER);
+        progressPanel.add(detailLabel, BorderLayout.SOUTH);
+        
+        progressDialog.setContentPane(progressPanel);
+        
+        SwingWorker<Integer, Void> worker = new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                int successCount = 0;
+                for (int i = 0; i < images.size(); i++) {
+                    File imageFile = images.get(i);
+                    final int current = i + 1;
+                    
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setValue(current);
+                        statusLabel.setText(String.format("正在上传 %d/%d", current, images.size()));
+                        detailLabel.setText(imageFile.getName());
+                    });
+                    
+                    try {
+                        ImageHistogram histogram = new ImageHistogram(imageFile);
+                        HBaseManager.storeImage(imageFile, histogram);
+                        successCount++;
+                        System.out.println("已上传: " + imageFile.getName());
+                    } catch (Exception e) {
+                        System.err.println("上传失败: " + imageFile.getName() + " - " + e.getMessage());
+                    }
+                }
+                return successCount;
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    Integer successCount = get();
+                    progressDialog.dispose();
+                    
+                    JOptionPane.showMessageDialog(parentFrame, 
+                        String.format("批量上传完成！\n成功: %d 张\n失败: %d 张", 
+                            successCount, images.size() - successCount), 
+                        "批量上传完成", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // 更新图像数量显示
+                    updateImageCountLabel(imageCountLabel);
+                    
+                    // 记录任务完成
+                    TaskLogger.logTask("批量上传到HBase", TaskLogger.TaskStatus.COMPLETED, 
+                        "成功上传 " + successCount + " 张图像");
+                    
+                } catch (Exception ex) {
+                    progressDialog.dispose();
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(parentFrame, 
+                        "批量上传失败: " + cause.getMessage(), 
+                        "错误", 
+                        JOptionPane.ERROR_MESSAGE);
+                    
+                    // 记录任务失败
+                    TaskLogger.logTask("批量上传到HBase", TaskLogger.TaskStatus.FAILED, 
+                        "错误: " + cause.getMessage());
+                }
+            }
+        };
+        
+        worker.execute();
+        progressDialog.setVisible(true);
+    }
+    
+    /**
+     * 从HBase删除图像
+     */
+    private static void deleteHBaseImage(JFrame parentFrame, JLabel imageCountLabel) {
+        try {
+            List<ImageHistogram> histograms = HBaseManager.getAllHistograms();
+            
+            if (histograms.isEmpty()) {
+                JOptionPane.showMessageDialog(parentFrame, 
+                    "HBase中暂无图像数据！", 
+                    "提示", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+            // 创建图像名称列表供用户选择
+            String[] imageNames = new String[histograms.size()];
+            for (int i = 0; i < histograms.size(); i++) {
+                imageNames[i] = histograms.get(i).getFilename();
+            }
+            
+            String selectedImage = (String) JOptionPane.showInputDialog(
+                parentFrame,
+                "选择要删除的图像:",
+                "删除HBase图像",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                imageNames,
+                imageNames[0]
+            );
+            
+            if (selectedImage == null) {
+                return;
+            }
+            
+            int confirm = JOptionPane.showConfirmDialog(parentFrame, 
+                "确定要从HBase中删除图像: " + selectedImage + " 吗？", 
+                "确认删除", 
+                JOptionPane.YES_NO_OPTION);
+                
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+            
+            // 执行删除
+            HBaseManager.deleteImage(selectedImage);
+            
+            JOptionPane.showMessageDialog(parentFrame, 
+                "已从HBase中删除图像: " + selectedImage, 
+                "删除成功", 
+                JOptionPane.INFORMATION_MESSAGE);
+            
+            // 更新图像数量显示
+            updateImageCountLabel(imageCountLabel);
+            
+            // 记录日志
+            TaskLogger.logTask("删除HBase图像", TaskLogger.TaskStatus.COMPLETED, 
+                "已删除: " + selectedImage);
+                
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(parentFrame, 
+                "删除失败: " + ex.getMessage(), 
+                "错误", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    /**
+     * 更新图像数量标签
+     */
+    private static void updateImageCountLabel(JLabel imageCountLabel) {
+        File imageDir = new File(IMAGE_RESOURCE_DIR);
+        List<File> existingImages = ImageResourceDownloader.getExistingImages(imageDir);
+        
+        String hbaseStatus = "未连接";
+        int hbaseCount = 0;
+        try {
+            hbaseCount = HBaseManager.getImageCount();
+            hbaseStatus = "已连接 (" + hbaseCount + " 条记录)";
+        } catch (Exception e) {
+            hbaseStatus = "连接失败";
+        }
+        
+        imageCountLabel.setText("本地图像: " + existingImages.size() + " 张 | HBase: " + hbaseStatus);
     }
 }
