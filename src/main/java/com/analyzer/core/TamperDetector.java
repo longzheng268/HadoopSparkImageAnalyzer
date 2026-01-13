@@ -137,7 +137,7 @@ public class TamperDetector {
     }
     
     /**
-     * 检测图像篡改（使用Spark RDD进行图像分割并行比对）
+     * 检测图像篡改（根据当前引擎使用Spark RDD或MapReduce进行图像分割并行比对）
      * 
      * @param suspectImage 疑似被篡改的图像
      * @param imageLibrary 图像库目录
@@ -146,6 +146,11 @@ public class TamperDetector {
      * @throws IOException 处理失败时抛出
      */
     public static List<TamperResult> detectTampering(File suspectImage, File imageLibrary, int threshold) throws IOException {
+        // 根据当前计算引擎选择处理方式
+        if (ComputeEngineManager.isUsingMapReduce()) {
+            return MapReduceProcessor.detectTamperingMapReduce(suspectImage, imageLibrary, threshold);
+        }
+        
         System.out.println("=== 使用Spark RDD进行分布式篡改检测 ===");
         
         BufferedImage suspect = ImageIO.read(suspectImage);
@@ -300,5 +305,61 @@ public class TamperDetector {
         }
         
         return matrix;
+    }
+    
+    /**
+     * 在单张图像中检测篡改（用于MapReduce）
+     * 
+     * @param suspectImage 疑似篡改图像
+     * @param originalImage 原始图像
+     * @param threshold 差异阈值
+     * @return 检测结果
+     * @throws IOException 处理失败时抛出
+     */
+    public static TamperResult detectInSingleImage(File suspectImage, File originalImage, int threshold) throws IOException {
+        BufferedImage suspect = ImageIO.read(suspectImage);
+        BufferedImage original = ImageIO.read(originalImage);
+        
+        if (suspect == null || original == null) {
+            return null;
+        }
+        
+        int suspectWidth = suspect.getWidth();
+        int suspectHeight = suspect.getHeight();
+        
+        // 只比较尺寸相同的图像
+        if (original.getWidth() != suspectWidth || original.getHeight() != suspectHeight) {
+            return null;
+        }
+        
+        int[][] suspectMatrix = getGrayscaleMatrix(suspect);
+        int[][] originalMatrix = getGrayscaleMatrix(original);
+        
+        // 逐像素比对
+        int matchingPixels = 0;
+        int totalPixels = suspectWidth * suspectHeight;
+        boolean[][] differenceMap = new boolean[suspectHeight][suspectWidth];
+        
+        for (int y = 0; y < suspectHeight; y++) {
+            for (int x = 0; x < suspectWidth; x++) {
+                int diff = Math.abs(suspectMatrix[y][x] - originalMatrix[y][x]);
+                if (diff <= threshold) {
+                    matchingPixels++;
+                    differenceMap[y][x] = false;
+                } else {
+                    differenceMap[y][x] = true;
+                }
+            }
+        }
+        
+        TamperResult result = new TamperResult(originalImage.getName(), matchingPixels, totalPixels);
+        
+        // 识别篡改区域
+        List<TamperedRegion> regions = findTamperedRegions(differenceMap, suspectWidth, suspectHeight);
+        for (TamperedRegion region : regions) {
+            result.addTamperedRegion(region);
+        }
+        
+        return result;
     }
 }

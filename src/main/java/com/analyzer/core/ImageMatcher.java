@@ -46,7 +46,7 @@ public class ImageMatcher {
     }
     
     /**
-     * 在图像库中搜索匹配的图像（从HBase读取数据，使用Spark RDD进行分布式比对）
+     * 在图像库中搜索匹配的图像（从HBase读取数据，根据当前引擎使用Spark RDD或MapReduce进行分布式比对）
      * 
      * @param queryImage 查询图像文件
      * @param imageLibrary 图像库目录（用于本地文件读取）
@@ -55,6 +55,11 @@ public class ImageMatcher {
      * @throws IOException 处理失败时抛出
      */
     public static List<MatchResult> searchImage(File queryImage, File imageLibrary, int topN) throws IOException {
+        // 根据当前计算引擎选择处理方式
+        if (ComputeEngineManager.isUsingMapReduce()) {
+            return MapReduceProcessor.searchImageMapReduce(queryImage, imageLibrary, topN);
+        }
+        
         System.out.println("=== 使用Spark RDD从HBase读取数据进行分布式全图搜索 ===");
         
         // 生成查询图像的直方图
@@ -116,13 +121,18 @@ public class ImageMatcher {
     }
     
     /**
-     * 批量生成图像直方图并存储到HBase（使用Spark RDD进行分布式处理）
+     * 批量生成图像直方图并存储到HBase（根据当前引擎使用Spark RDD或MapReduce进行分布式处理）
      * 
      * @param imageDir 图像目录
      * @param callback 进度回调
      * @return 直方图列表
      */
     public static List<ImageHistogram> generateHistograms(File imageDir, ProgressCallback callback) {
+        // 根据当前计算引擎选择处理方式
+        if (ComputeEngineManager.isUsingMapReduce()) {
+            return MapReduceProcessor.generateHistogramsMapReduce(imageDir, callback);
+        }
+        
         System.out.println("=== 使用Spark RDD进行分布式直方图生成并存储到HBase ===");
         
         List<File> images = ImageResourceDownloader.getExistingImages(imageDir);
