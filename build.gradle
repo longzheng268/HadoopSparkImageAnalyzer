@@ -9,11 +9,15 @@ version = '1.0.0'
 
 // 版本管理
 ext {
-    // 与虚拟机环境对齐，解决版本兼容性问题
-    // VM环境版本: Spark 3.1.2, Hadoop 3.2.0
-    sparkVersion = '3.1.2'     // 与VM环境Spark版本对齐
-    hadoopVersion = '3.2.0'    // 与VM环境Hadoop版本对齐
+    // 使用安全的修补版本，解决已知漏洞
+    // 推荐升级VM环境以匹配这些版本
+    sparkVersion = '3.3.3'     // 修复权限管理漏洞 (CVE-2023-32007, CVE-2022-33891)
+    hadoopVersion = '3.2.4'    // 修复多个安全漏洞 (参数注入、堆溢出、路径遍历)
     scala_version = '2.12'
+    
+    // 如果VM环境无法升级，请使用以下版本（存在安全风险）：
+    // sparkVersion = '3.1.2'  // ⚠️ 已知漏洞
+    // hadoopVersion = '3.2.0' // ⚠️ 已知漏洞
 }
 
 java {

@@ -21,29 +21,67 @@
 **切换方法：**
 在GUI主界面右上角的"计算引擎"下拉菜单中选择即可。所有图像处理任务（直方图生成、全图搜索、局部特征搜索、篡改检测）都会使用选定的引擎执行。
 
-## 版本对齐说明
+## 🚨 版本与安全说明
 
-⚠️ **重要安全提示**: 查看 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md) 了解已知漏洞和缓解措施。
+### 推荐配置（安全版本）
 
-为确保与虚拟机环境的兼容性，本项目使用以下版本：
-- **Spark**: 3.1.2（与VM环境对齐）
-- **Hadoop**: 3.2.0（与VM环境对齐）
+**⚠️ 强烈建议升级VM环境到以下版本：**
+
+- **Spark**: 3.3.3（修复已知安全漏洞）
+- **Hadoop**: 3.2.4（修复已知安全漏洞）
 - **HBase**: 2.2.7
-- **Redis**: 6.2.9（通过Jedis 3.6.0客户端）
+- **Redis**: 6.2.9
 - **Java**: 1.8+
 
-这些版本已验证可以在Spark 3.1.2 + Hadoop 3.2.0的环境中正常工作，解决了之前版本不匹配导致的`ApplicationClientProtocolPB`错误。
+**当前build.gradle已配置为安全版本（3.3.3 / 3.2.4）**
 
-### ⚠️ 安全考虑
+如果您的VM环境已经是这些版本，可以直接使用。如果VM环境是旧版本，请按照以下步骤升级。
 
-由于VM环境限制，当前使用的Hadoop 3.2.0和Spark 3.1.2版本存在已知安全漏洞。**建议采取以下措施**：
+### VM环境升级步骤
 
-1. **网络隔离**: 在隔离的网络环境中部署
-2. **访问控制**: 使用最小权限原则
-3. **监控审计**: 启用完整的日志记录
-4. **输入验证**: 只处理可信来源的图像（已在代码中实现）
+```bash
+# 1. 升级Hadoop到3.2.4
+wget https://archive.apache.org/dist/hadoop/core/hadoop-3.2.4/hadoop-3.2.4.tar.gz
+# 安装并配置...
+
+# 2. 升级Spark到3.3.3
+wget https://archive.apache.org/dist/spark/spark-3.3.3/spark-3.3.3-bin-hadoop3.tgz
+# 安装并配置...
+
+# 3. 验证
+hadoop version  # 应显示3.2.4
+spark-submit --version  # 应显示3.3.3
+```
+
+### ⚠️ 如果VM环境无法升级
+
+如果您的VM环境固定为Spark 3.1.2和Hadoop 3.2.0，存在以下问题：
+
+**版本兼容性问题：**
+- build.gradle中的新版本Jar包会与旧版本VM环境产生Protobuf冲突
+- 导致`ApplicationClientProtocolPB`错误
+
+**安全风险：**
+- ❌ Hadoop 3.2.0包含12个已知CVE漏洞（参数注入、堆溢出、路径遍历、权限管理）
+- ❌ Spark 3.1.2包含3个已知CVE漏洞（权限管理）
+- ⚠️ **不推荐在生产环境使用**
+
+**如果必须使用旧版本：**
+
+1. 修改`build.gradle`中的版本配置（有注释说明）
+2. **必须**阅读并实施 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md) 中的所有缓解措施
+3. 在隔离的网络环境中部署
+4. 只处理可信来源的数据
+5. 实施严格的访问控制
+6. 启用完整的审计日志
 
 详细的安全信息和缓解策略，请参阅 [SECURITY_VULNERABILITIES.md](SECURITY_VULNERABILITIES.md)。
+
+### ✅ 版本验证
+
+当前配置已通过编译测试：
+- ✅ Spark 3.3.3 + Hadoop 3.2.4: BUILD SUCCESSFUL
+- ⚠️ Spark 3.1.2 + Hadoop 3.2.0: BUILD SUCCESSFUL (但存在安全风险)
 
 ## 核心功能模块
 

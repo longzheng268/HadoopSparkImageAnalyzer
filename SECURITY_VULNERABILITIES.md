@@ -1,6 +1,55 @@
-# Security Vulnerabilities and Mitigation Strategy
+# Security Vulnerabilities - CRITICAL ADVISORY
 
-## ⚠️ Known Vulnerabilities
+## 🚨 CRITICAL: UPGRADE REQUIRED
+
+**CURRENT STATUS: HIGH SECURITY RISK**
+
+The dependencies used in this project contain **CRITICAL VULNERABILITIES** that should NOT be used in production without immediate action.
+
+## ⚠️ STOP - READ THIS FIRST
+
+**DO NOT DEPLOY TO PRODUCTION** with the current vulnerable versions (Hadoop 3.2.0, Spark 3.1.2) without:
+1. Upgrading the VM environment to patched versions, OR
+2. Implementing ALL security mitigations listed below AND accepting the documented risks
+
+## 🎯 RECOMMENDED ACTION: UPGRADE VM ENVIRONMENT
+
+The **ONLY proper solution** is to upgrade your VM environment:
+
+### Required Upgrades
+```bash
+# Upgrade Hadoop
+Current: 3.2.0  →  Required: 3.2.4 or higher
+Fixes: Argument Injection, Heap Overflow, Path Traversal, Privilege Management
+
+# Upgrade Spark  
+Current: 3.1.2  →  Required: 3.3.3 or higher
+Fixes: Privilege Management vulnerabilities
+
+# Then update build.gradle:
+sparkVersion = '3.3.3'
+hadoopVersion = '3.2.4'
+```
+
+### How to Upgrade VM Environment
+```bash
+# 1. Backup current installation
+sudo tar -czf /backup/hadoop-3.2.0.tar.gz /opt/hadoop
+sudo tar -czf /backup/spark-3.1.2.tar.gz /opt/spark
+
+# 2. Download patched versions
+wget https://archive.apache.org/dist/hadoop/core/hadoop-3.2.4/hadoop-3.2.4.tar.gz
+wget https://archive.apache.org/dist/spark/spark-3.3.3/spark-3.3.3-bin-hadoop3.tgz
+
+# 3. Install and configure
+# Follow Apache Hadoop/Spark installation guides
+
+# 4. Verify installation
+hadoop version  # Should show 3.2.4
+spark-submit --version  # Should show 3.3.3
+```
+
+## ❌ IF YOU CANNOT UPGRADE (NOT RECOMMENDED)
 
 ### Hadoop 3.2.0 Vulnerabilities
 
