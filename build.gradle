@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'application'
+}
+
+group = 'com.analyzer'
+version = '1.0.0'
+
+// 版本管理
+ext {
+    sparkVersion = '3.3.0'
+    hadoopVersion = '3.3.4'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Swing GUI框架（Java内置，无需额外依赖）
+    // 如需扩展功能，可启用以下库
+    // implementation 'org.swinglabs:swingx:1.6.1'
+
+    // Hadoop/Spark依赖（示例，需手动启用）
+    // implementation "org.apache.spark:spark-core_2.12:${sparkVersion}"
+    // implementation "org.apache.hadoop:hadoop-client:${hadoopVersion}"
+    // implementation "org.apache.hadoop:hadoop-common:${hadoopVersion}"
+}
+
+application {
+    mainClass = 'com.analyzer.Main'
+}
+
+// Eclipse配置
+eclipse {
+    classpath {
+        downloadSources = true
+        downloadJavadoc = false
+    }
+}
+
+// 配置编码为UTF-8
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
